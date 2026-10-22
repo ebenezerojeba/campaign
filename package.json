@@ -1,0 +1,56 @@
+{
+  "name": "apc-lagos-volunteers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "APC Lagos Volunteer Programme: registration, volunteer portal and administration platform",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c green,yellow \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "node --watch-path=server --watch-path=shared server/src/server.js",
+    "dev:web": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "NODE_ENV=production node server/src/server.js",
+    "test": "node --test --test-concurrency=1 server/test/",
+    "seed": "node server/scripts/seed.js",
+    "seed:reset": "node server/scripts/seed.js --reset",
+    "create-admin": "node server/scripts/create-admin.js"
+  },
+  "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/figtree": "^5.3.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^9.2.5",
+    "mongodb-memory-server-core": "^11.3.0",
+    "supertest": "^7.3.1",
+    "tailwindcss": "^4.3.3",
+    "vite": "^6.4.5"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.9.2",
+    "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.11.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "framer-motion": "^14.6.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.61.0",
+    "mongoose": "^8.24.6",
+    "multer": "^2.5.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-hook-form": "^7.90.0",
+    "react-router": "^7.18.4",
+    "recharts": "^3.10.1",
+    "resend": "^6.34.1",
+    "zod": "^3.25.76"
+  }
+}

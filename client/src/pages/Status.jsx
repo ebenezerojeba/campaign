@@ -1,0 +1,66 @@
+import { useState } from 'react';
+import { Link } from 'react-router';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Search, CircleCheck, Hourglass, CircleX } from 'lucide-react';
+import { Button } from '../components/ui/Button.jsx';
+import { TextField } from '../components/ui/Field.jsx';
+import { Alert } from '../components/ui/Feedback.jsx';
+import { statusLookupSchema } from '../../../shared/schemas.js';
+import { post } from '../lib/api.js';
+import { formatDate } from '../lib/format.js';
+
+const RESULT = {
+  pending: { Icon: Hourglass, tone: 'bg-gold-50 border-gold-200', iconCls: 'text-gold-600', title: 'Your application is being reviewed', body: 'The programme team will contact you by your preferred method when a decision is made.' },
+  approved: { Icon: CircleCheck, tone: 'bg-green-50 border-green-100', iconCls: 'text-green-700', title: 'Your application has been approved', body: 'Welcome to the programme. The team will be in touch about activities that match your interests.' },
+  rejected: { Icon: CircleX, tone: 'bg-danger-50 border-[#f1c9c4]', iconCls: 'text-danger-700', title: 'Your application was not approved', body: 'Thank you for your interest. If you think your details were incorrect, contact the programme team.' },
+};
+
+export default function Status() {
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({ resolver: zodResolver(statusLookupSchema), mode: 'onTouched' });
+
+  const onSubmit = handleSubmit(async (values) => {
+    setError(null);
+    setResult(null);
+    try {
+      setResult(await post('/volunteers/status', values));
+    } catch (err) {
+      setError(err);
+    }
+  });
+
+  const r = result && RESULT[result.status];
+
+  return (
+    <div className="bg-mist py-12 sm:py-20">
+      <div className="container-page max-w-xl">
+        <h1 className="type-h2 text-forest-900">Check your application</h1>
+        <p className="type-lead mt-3 text-slate-600">Enter the reference you received when you registered and the phone number you used.</p>
+
+        <form onSubmit={onSubmit} noValidate className="mt-8 grid gap-5 rounded-[var(--radius-xl)] border border-line bg-paper p-5 shadow-soft sm:p-7">
+          <TextField label="Registration reference" placeholder="LAG-7K3M-9QPX" autoCapitalize="characters" autoComplete="off" spellCheck={false} inputClassName="font-mono uppercase tracking-wider" error={errors.reference?.message} {...register('reference')} />
+          <TextField label="Phone number" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="0803 123 4567" error={errors.phone?.message} {...register('phone')} />
+          <Button type="submit" size="lg" icon={Search} loading={isSubmitting} loadingText="Checking">Check status</Button>
+        </form>
+
+        <div aria-live="polite" className="mt-6">
+          {error && <Alert tone={error.status === 404 ? 'warning' : 'error'} title={error.status === 404 ? 'No matching application' : 'We could not check your status'}>{error.message}</Alert>}
+          {r && (
+            <div className={`flex gap-4 rounded-xl border p-5 ${r.tone}`}>
+              <r.Icon className={`size-7 shrink-0 ${r.iconCls}`} aria-hidden />
+              <div>
+                <p className="font-display text-xl font-semibold text-forest-900">{result.firstName}, {r.title.charAt(0).toLowerCase() + r.title.slice(1)}</p>
+                <p className="mt-1 text-[15px] text-slate-600">{r.body}</p>
+                <p className="mt-3 text-sm text-slate-500">Submitted {formatDate(result.submittedAt)}{result.reviewedAt ? `, reviewed ${formatDate(result.reviewedAt)}` : ''}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <p className="mt-8 text-[15px] text-slate-600">Not registered yet? <Link to="/register" className="font-semibold text-green-700 underline underline-offset-4">Start your application</Link></p>
+      </div>
+    </div>
+  );
+}
