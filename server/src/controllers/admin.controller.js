@@ -7,8 +7,8 @@ import { toCsv } from '../utils/csv.js';
 import { audit } from '../services/audit.js';
 import { sendDecisionEmail } from '../services/email.js';
 import { issueStaffSession, clearSession, readStaffToken, STAFF_COOKIE } from '../middleware/index.js';
-import { normalisePhone } from '../../../shared/schemas.js';
-import { labelFor, INTERESTS, SKILLS, AVAILABILITY, CONTACT_METHODS, PARTICIPATION_FORMATS } from '../../../shared/options.js';
+import { normalisePhone, POLLING_UNIT_CODE_RE } from '../../../shared/schemas.js';
+import { labelFor, AGENT_TYPES, INTERESTS, SKILLS, AVAILABILITY, CONTACT_METHODS, PARTICIPATION_FORMATS } from '../../../shared/options.js';
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -115,6 +115,12 @@ function buildVolunteerFilter(q) {
   if (q.status) filter.status = q.status;
   if (q.lga) filter.lga = q.lga;
   if (q.interest) filter.interests = q.interest;
+  if (q.agentType) filter.agentType = q.agentType === 'none' ? { $exists: false } : q.agentType;
+  if (q.stateOfOrigin) filter.stateOfOrigin = q.stateOfOrigin;
+  if (q.lgaOfOrigin) filter.lgaOfOrigin = q.lgaOfOrigin;
+  if (q.senatorialDistrict) filter.senatorialDistrict = q.senatorialDistrict;
+  if (q.wardCode) filter.wardCode = q.wardCode;
+  if (q.pollingUnitCode) filter.pollingUnitCode = q.pollingUnitCode;
   if (q.sample === 'real') filter.isSample = false;
   if (q.sample === 'sample') filter.isSample = true;
   if (q.from || q.to) {
@@ -126,6 +132,7 @@ function buildVolunteerFilter(q) {
     const term = q.q.trim();
     const phone = normalisePhone(term);
     if (/^(LAG|DEMO)-/i.test(term)) filter.reference = { $regex: `^${escapeRegex(term.toUpperCase())}` };
+    else if (POLLING_UNIT_CODE_RE.test(term)) filter.pollingUnitCode = term;
     else if (phone) filter.phone = phone;
     else if (term.includes('@')) filter.email = term.toLowerCase();
     else {
@@ -136,7 +143,7 @@ function buildVolunteerFilter(q) {
   return filter;
 }
 
-const LIST_FIELDS = 'reference firstName lastName phone email lga lcda interests status createdAt isSample';
+const LIST_FIELDS = 'reference firstName lastName phone email agentType lga lcda ward wardCode pollingUnitCode interests status createdAt isSample';
 
 export async function listVolunteers(req, res) {
   const q = req.validatedQuery;
@@ -211,9 +218,17 @@ const EXPORT_COLUMNS = [
   { label: 'Phone', get: (v) => (v.phone?.startsWith('+234') ? `0${v.phone.slice(4)}` : v.phone) },
   { label: 'Email', get: (v) => v.email },
   { label: 'Preferred contact', get: (v) => labelFor(CONTACT_METHODS, v.contactMethod) },
-  { label: 'LGA', get: (v) => v.lga },
+  { label: 'Agent type', get: (v) => (v.agentType ? labelFor(AGENT_TYPES, v.agentType) : '') },
+  { label: 'State of origin', get: (v) => v.stateOfOrigin },
+  { label: 'LGA of origin', get: (v) => v.lgaOfOrigin },
+  { label: 'State of residence', get: (v) => v.state },
+  { label: 'LGA of residence', get: (v) => v.lga },
   { label: 'LCDA', get: (v) => v.lcda },
+  { label: 'Senatorial district', get: (v) => v.senatorialDistrict },
   { label: 'Ward', get: (v) => v.ward },
+  { label: 'Ward code', get: (v) => v.wardCode },
+  { label: 'Polling unit', get: (v) => v.pollingUnit },
+  { label: 'Polling unit code', get: (v) => v.pollingUnitCode },
   { label: 'Community', get: (v) => v.community },
   { label: 'Interests', get: (v) => v.interests.map((i) => labelFor(INTERESTS, i)) },
   { label: 'Skills', get: (v) => v.skills.map((i) => labelFor(SKILLS, i)) },

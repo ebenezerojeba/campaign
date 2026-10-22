@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { VOLUNTEER_STATUSES, valuesOf } from '../../../shared/options.js';
+import { VOLUNTEER_STATUSES, AGENT_TYPES, valuesOf } from '../../../shared/options.js';
 
 const { Schema } = mongoose;
 
@@ -54,11 +54,24 @@ const volunteerSchema = new Schema(
     email: { type: String, trim: true, lowercase: true, maxlength: 120 },
     phone: { type: String, required: true }, // normalised +234XXXXXXXXXX
     contactMethod: { type: String, required: true },
+    // Required on every new application (see shared/schemas.js); records
+    // created before this field existed have no value.
+    agentType: { type: String, enum: valuesOf(AGENT_TYPES) },
 
+    stateOfOrigin: String,
+    lgaOfOrigin: String,
+
+    // Residence (the programme registers Lagos residents only).
     state: { type: String, default: 'Lagos' },
     lga: { type: String, required: true },
     lcda: String,
+    // Electoral location, resolved on the server from the official INEC data
+    // in pollingunit/. Names are copied from that data, not from the browser.
+    senatorialDistrict: String,
     ward: String,
+    wardCode: String,
+    pollingUnit: String,
+    pollingUnitCode: String, // INEC delimitation code, e.g. 24-01-01-001
     community: String,
 
     interests: { type: [String], default: [] },
@@ -93,6 +106,9 @@ volunteerSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { e
 volunteerSchema.index({ status: 1, createdAt: -1 });
 volunteerSchema.index({ lga: 1, status: 1 });
 volunteerSchema.index({ interests: 1 });
+volunteerSchema.index({ agentType: 1, status: 1 });
+volunteerSchema.index({ stateOfOrigin: 1, lgaOfOrigin: 1 });
+volunteerSchema.index({ lga: 1, wardCode: 1, pollingUnitCode: 1 });
 volunteerSchema.index({ createdAt: -1 });
 volunteerSchema.index({ isSample: 1 });
 

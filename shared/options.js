@@ -48,6 +48,12 @@ export const PARTICIPATION_FORMATS = [
   { value: 'either', label: 'Either', hint: 'Whatever is needed' },
 ];
 
+// Chosen by the applicant. Never assigned automatically.
+export const AGENT_TYPES = [
+  { value: 'agent_1', label: 'Agent 1' },
+  { value: 'agent_2', label: 'Agent 2' },
+];
+
 export const VOLUNTEER_STATUSES = [
   { value: 'pending', label: 'Pending review' },
   { value: 'approved', label: 'Approved' },

@@ -10,7 +10,7 @@ import { OpportunityCard } from '../components/OpportunityCard.jsx';
 import { api, ApiError } from '../lib/api.js';
 import { useFetch } from '../lib/useFetch.js';
 import { formatDate, cx } from '../lib/format.js';
-import { CONTACT_METHODS, INTERESTS, SKILLS, AVAILABILITY, PARTICIPATION_FORMATS } from '../../../shared/options.js';
+import { CONTACT_METHODS, AGENT_TYPES, INTERESTS, SKILLS, AVAILABILITY, PARTICIPATION_FORMATS, labelFor } from '../../../shared/options.js';
 
 const p = (path, opts) => api(`/portal${path}`, opts);
 
@@ -163,7 +163,7 @@ function Profile({ me, onUpdated }) {
   const [error, setError] = useState(null);
   const { register, control, handleSubmit, formState: { isSubmitting, isDirty }, reset } = useForm({
     defaultValues: {
-      contactMethod: me.contactMethod, ward: me.ward ?? '', community: me.community ?? '', interests: me.interests, skills: me.skills,
+      contactMethod: me.contactMethod, community: me.community ?? '', interests: me.interests, skills: me.skills,
       availability: me.availability, participationFormat: me.participationFormat, consentCommunications: me.consentCommunications,
     },
   });
@@ -188,15 +188,16 @@ function Profile({ me, onUpdated }) {
           <div><dt className="text-sm text-slate-500">Phone</dt><dd>{me.phone}</dd></div>
           <div><dt className="text-sm text-slate-500">Email</dt><dd>{me.email}</dd></div>
           <div><dt className="text-sm text-slate-500">LGA</dt><dd>{me.lga}{me.lcda && me.lcda !== me.lga ? ` (${me.lcda})` : ''}</dd></div>
+          <div><dt className="text-sm text-slate-500">Agent type</dt><dd>{me.agentType ? labelFor(AGENT_TYPES, me.agentType) : 'Not recorded'}</dd></div>
+          {me.stateOfOrigin && <div><dt className="text-sm text-slate-500">Origin</dt><dd>{me.lgaOfOrigin}, {me.stateOfOrigin}</dd></div>}
+          {me.ward && <div><dt className="text-sm text-slate-500">Ward</dt><dd>{me.ward}</dd></div>}
+          {me.pollingUnit && <div><dt className="text-sm text-slate-500">Polling unit</dt><dd>{me.pollingUnit} <span className="text-slate-500 tabular">({me.pollingUnitCode})</span></dd></div>}
         </dl>
-        <p className="mt-4 text-sm text-slate-500">To change your name, phone, email or LGA, send a correction request from the Privacy tab so the team can verify it.</p>
+        <p className="mt-4 text-sm text-slate-500">To change your name, phone, email, LGA, ward or polling unit, send a correction request from the Privacy tab so the team can verify it.</p>
       </div>
       <div className="grid gap-6 rounded-[var(--radius-lg)] border border-line bg-white p-5 sm:p-6">
         <Controller control={control} name="contactMethod" render={({ field }) => <ChoiceGroup legend="Preferred contact method" type="radio" name="contactMethod" options={contactOptions} value={field.value} onChange={field.onChange} />} />
-        <div className="grid gap-5 sm:grid-cols-2">
-          <TextField label="Ward" optional {...register('ward')} />
-          <TextField label="Community" optional {...register('community')} />
-        </div>
+        <TextField label="Community" optional {...register('community')} className="sm:max-w-md" />
         <Controller control={control} name="interests" render={({ field }) => <ChoiceGroup legend="Areas of interest" options={INTERESTS} value={field.value} onChange={field.onChange} />} />
         <Controller control={control} name="skills" render={({ field }) => <ChoiceGroup legend="Skills" optional options={SKILLS} value={field.value} onChange={field.onChange} />} />
         <Controller control={control} name="availability" render={({ field }) => <ChoiceGroup legend="When you are usually free" options={AVAILABILITY} value={field.value} onChange={field.onChange} />} />

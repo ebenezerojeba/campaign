@@ -5,7 +5,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/index.js": { "maxDuration": 30, "memory": 1024 }
+    "api/index.js": { "maxDuration": 30, "memory": 1024, "includeFiles": "pollingunit/**" }
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },

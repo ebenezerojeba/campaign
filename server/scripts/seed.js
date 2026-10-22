@@ -17,7 +17,9 @@ import { Opportunity } from '../src/models/Opportunity.js';
 import { Announcement } from '../src/models/misc.js';
 import { generateReference } from '../src/utils/reference.js';
 import { LAGOS_AREAS } from '../../shared/lagos.js';
-import { INTERESTS, SKILLS, AVAILABILITY, CONTACT_METHODS, PRIVACY_NOTICE_VERSION, valuesOf } from '../../shared/options.js';
+import { AGENT_TYPES, INTERESTS, SKILLS, AVAILABILITY, CONTACT_METHODS, PRIVACY_NOTICE_VERSION, valuesOf } from '../../shared/options.js';
+import { STATE_NAMES, lgasOfState } from '../../shared/nigeria.js';
+import { wardsFor, pollingUnitsFor, resolveElectoral } from '../src/services/electoral.js';
 
 const args = new Set(process.argv.slice(2));
 const reset = args.has('--reset');
@@ -54,6 +56,11 @@ function sampleVolunteers(count) {
     const lastName = pick(LAST);
     const lga = weightedLga();
     const lcdas = LAGOS_AREAS.find((a) => a.lga === lga).lcdas;
+    const origin = rand() < 0.45 ? 'Lagos' : pick(STATE_NAMES);
+    // Ward and polling unit come from the official data, resolved like a real registration.
+    const ward = pick(wardsFor('Lagos', lga).wards);
+    const unit = pick(pollingUnitsFor('Lagos', lga, ward.code));
+    const electoral = resolveElectoral({ state: 'Lagos', lga, wardCode: ward.code, pollingUnitCode: unit.code }).fields;
     // More registrations in recent days, to give the trend chart a shape.
     const daysAgo = Math.floor(Math.pow(rand(), 1.6) * 45);
     const createdAt = new Date(now - daysAgo * 86400000 - Math.floor(rand() * 86400000));
@@ -71,9 +78,13 @@ function sampleVolunteers(count) {
       email: hasEmail ? `${firstName}.${lastName}.${i}@example.com`.toLowerCase() : undefined,
       phone: `+23480${String(10000000 + i * 7919).slice(-8)}`,
       contactMethod,
+      agentType: pick(valuesOf(AGENT_TYPES)),
+      stateOfOrigin: origin,
+      lgaOfOrigin: pick(lgasOfState(origin)),
       state: 'Lagos',
       lga,
       lcda: rand() < 0.5 ? pick(lcdas) : undefined,
+      ...electoral,
       interests: some(valuesOf(INTERESTS), 1, 3),
       skills: some(valuesOf(SKILLS), 0, 3),
       availability: some(valuesOf(AVAILABILITY), 1, 3),

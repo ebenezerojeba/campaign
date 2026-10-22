@@ -20,6 +20,8 @@ publicRouter.get('/config', pub.publicConfig);
 publicRouter.get('/stats', requireDb, pub.publicStats);
 publicRouter.get('/opportunities', requireDb, validate(v.publicOpportunityQuerySchema, 'query'), pub.listOpportunities);
 publicRouter.get('/opportunities/:id', id, requireDb, pub.getOpportunity);
+publicRouter.get('/locations/wards', validate(v.wardQuerySchema, 'query'), pub.listWards);
+publicRouter.get('/locations/polling-units', validate(v.pollingUnitQuerySchema, 'query'), pub.listPollingUnits);
 publicRouter.post('/volunteers/register', limits.register, validate(registrationSchema), requireDb, pub.register);
 publicRouter.post('/volunteers/status', limits.lookup, validate(statusLookupSchema), requireDb, pub.checkStatus);
 

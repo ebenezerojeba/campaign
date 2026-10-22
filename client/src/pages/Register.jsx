@@ -3,22 +3,24 @@ import { Link } from 'react-router';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { m, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Check, Pencil, ShieldCheck, Clock, Smartphone, Send } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Pencil, ShieldCheck, Clock, Smartphone, Send, RotateCw } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
 import { TextField, SelectField, TextArea, ChoiceGroup, Checkbox } from '../components/ui/Field.jsx';
+import { Combobox } from '../components/ui/Combobox.jsx';
 import { Alert } from '../components/ui/Feedback.jsx';
 import { RegistrationSuccess } from '../components/RegistrationSuccess.jsx';
 import { STEP_SCHEMAS, STEP_FIELDS } from '../../../shared/schemas.js';
-import { LAGOS_AREAS, lcdasFor, wardsFor, STATE } from '../../../shared/lagos.js';
-import { CONTACT_METHODS, INTERESTS, SKILLS, AVAILABILITY, PARTICIPATION_FORMATS, labelFor } from '../../../shared/options.js';
+import { LAGOS_AREAS, lcdasFor, STATE } from '../../../shared/lagos.js';
+import { STATE_NAMES, lgasOfState, stateLabel } from '../../../shared/nigeria.js';
+import { CONTACT_METHODS, AGENT_TYPES, INTERESTS, SKILLS, AVAILABILITY, PARTICIPATION_FORMATS, labelFor } from '../../../shared/options.js';
 import { privacyNotice } from '../content/site.js';
-import { post } from '../lib/api.js';
+import { get, post } from '../lib/api.js';
 import { useConfig } from '../lib/config.jsx';
 import { cx } from '../lib/format.js';
 
 const STEPS = [
   { title: 'Your details', short: 'Details' },
-  { title: 'Where you live', short: 'Location' },
+  { title: 'Where you are from and live', short: 'Location' },
   { title: 'How you can help', short: 'Interests' },
   { title: 'Review and submit', short: 'Review' },
 ];
@@ -28,8 +30,9 @@ const SUCCESS_KEY = 'apc-registration-success';
 const CONSENT_FIELDS = ['ageConfirmed', 'consentProcessing', 'consentCommunications'];
 
 const EMPTY = {
-  firstName: '', lastName: '', email: '', phone: '', contactMethod: '',
-  state: STATE, lga: '', lcda: '', ward: '', community: '',
+  firstName: '', lastName: '', email: '', phone: '', contactMethod: '', agentType: '',
+  stateOfOrigin: '', lgaOfOrigin: '',
+  state: STATE, lga: '', lcda: '', wardCode: '', pollingUnitCode: '', ward: '', pollingUnitName: '', community: '', electoralRequired: false,
   interests: [], skills: [], availability: [], participationFormat: '', motivation: '',
   ageConfirmed: false, consentProcessing: false, consentCommunications: false, website: '',
 };
@@ -115,48 +118,210 @@ function StepPersonal({ register, errors, control, watch }) {
           <ChoiceGroup legend="How should we contact you?" type="radio" name="contactMethod" options={CONTACT_METHODS} value={field.value} onChange={field.onChange} error={errors.contactMethod?.message} />
         )}
       />
+      <SelectField
+        label="Agent type"
+        placeholder="Choose agent type"
+        options={AGENT_TYPES}
+        className="sm:max-w-sm"
+        error={errors.agentType?.message}
+        {...register('agentType')}
+      />
     </div>
   );
 }
 
-function StepLocation({ register, errors, watch, setValue }) {
-  const lga = watch('lga');
-  const lcdas = lcdasFor(lga);
-  const wards = wardsFor(lga);
-  const lgaField = register('lga');
+// Official ward and polling-unit lists, fetched per LGA and ward and kept for
+// the session so moving between steps does not refetch.
+const locationCache = new Map();
+
+function useLocationList(path) {
+  const [state, setState] = useState(() => (path && locationCache.has(path) ? { status: 'ready', data: locationCache.get(path) } : { status: path ? 'loading' : 'idle' }));
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!path) { setState({ status: 'idle' }); return undefined; }
+    if (locationCache.has(path)) { setState({ status: 'ready', data: locationCache.get(path) }); return undefined; }
+    const controller = new AbortController();
+    setState({ status: 'loading' });
+    get(path, { signal: controller.signal })
+      .then((data) => { locationCache.set(path, data); setState({ status: 'ready', data }); })
+      .catch((error) => { if (error.name !== 'AbortError') setState({ status: 'error', error }); });
+    return () => controller.abort();
+  }, [path, attempt]);
+  return { ...state, retry: () => setAttempt((n) => n + 1) };
+}
+
+function LoadError({ what, onRetry }) {
   return (
-    <div className="grid gap-6">
-      <TextField label="State" value="Lagos State" readOnly disabled hint="This programme currently registers volunteers living in Lagos State." />
-      <SelectField
-        label="Local Government Area (LGA)"
-        placeholder="Choose your LGA"
-        options={LAGOS_AREAS.map((a) => ({ value: a.lga, label: a.lga }))}
-        error={errors.lga?.message}
-        {...lgaField}
-        onChange={(e) => {
-          lgaField.onChange(e);
-          // Keep dependent selections consistent with the new LGA.
-          setValue('lcda', '');
-          setValue('ward', '');
-        }}
-      />
-      {lga && (
-        <SelectField
-          label="Local Council Development Area (LCDA)"
-          optional
-          hint={`Choose ${lga} if you live in the LGA's own core area, or pick your development area.`}
-          placeholder="I'm not sure"
-          options={[{ value: lga, label: `${lga} (LGA core area)` }, ...lcdas.map((l) => ({ value: l, label: l }))]}
-          error={errors.lcda?.message}
-          {...register('lcda')}
-        />
-      )}
-      {lga && (wards.length > 0 ? (
-        <SelectField label="Ward" optional placeholder="Choose your ward" options={wards.map((w) => ({ value: w, label: w }))} error={errors.ward?.message} {...register('ward')} />
-      ) : (
-        <TextField label="Ward" optional hint="If you know your ward name or number." autoComplete="off" error={errors.ward?.message} {...register('ward')} />
-      ))}
-      <TextField label="Community or neighbourhood" optional placeholder="For example, Ikotun or Ebute Metta" autoComplete="off" hint="Helps us find activities near you. Please don't enter your street address." error={errors.community?.message} {...register('community')} />
+    <Alert tone="error" title={`The ${what} list did not load`} action={
+      <button type="button" onClick={onRetry} className="inline-flex items-center gap-1.5 font-semibold text-forest-900 underline underline-offset-4"><RotateCw className="size-4" aria-hidden />Try again</button>
+    }>
+      Check your internet connection. Your other answers are saved on this device.
+    </Alert>
+  );
+}
+
+function FieldGroup({ title, description, children }) {
+  return (
+    <fieldset className="grid gap-6">
+      <legend className="mb-1">
+        <span className="block font-display text-lg font-semibold text-forest-900">{title}</span>
+        {description && <span className="mt-0.5 block text-sm text-slate-500">{description}</span>}
+      </legend>
+      {children}
+    </fieldset>
+  );
+}
+
+const titleCase = (s) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+function StepLocation({ errors, control, watch, setValue, register }) {
+  const [stateOfOrigin, lga, wardCode] = watch(['stateOfOrigin', 'lga', 'wardCode']);
+  const lcdas = lcdasFor(lga);
+  const originLgas = lgasOfState(stateOfOrigin);
+  const clear = (...names) => names.forEach((n) => setValue(n, ''));
+
+  const wards = useLocationList(lga ? `/locations/wards?state=${encodeURIComponent(STATE)}&lga=${encodeURIComponent(lga)}` : null);
+  const configured = wards.status === 'ready' && wards.data.configured;
+  const unconfigured = wards.status === 'ready' && !wards.data.configured;
+  const required = Boolean(configured && wards.data.required);
+  const wardKnown = configured && wards.data.wards.some((w) => w.code === wardCode);
+  const units = useLocationList(wardKnown
+    ? `/locations/polling-units?state=${encodeURIComponent(STATE)}&lga=${encodeURIComponent(lga)}&ward=${encodeURIComponent(wardCode)}`
+    : null);
+
+  // Lets the browser require ward and polling unit only where official data
+  // exists. The server applies the same rule independently.
+  useEffect(() => { setValue('electoralRequired', required); }, [required, setValue]);
+
+  const wardOptions = configured ? wards.data.wards.map((w) => ({ value: w.code, label: w.name, description: w.code })) : [];
+  const unitOptions = units.status === 'ready' ? units.data.map((u) => ({ value: u.code, label: u.name, description: u.code.slice(-3) })) : [];
+
+  return (
+    <div className="grid gap-10">
+      <FieldGroup title="Where you are from" description="Your state and Local Government Area of origin.">
+        <Controller control={control} name="stateOfOrigin" render={({ field }) => (
+          <Combobox
+            label="State of origin"
+            placeholder="Type or choose a state"
+            options={STATE_NAMES.map((st) => ({ value: st, label: stateLabel(st) }))}
+            value={field.value}
+            onBlur={field.onBlur}
+            ref={field.ref}
+            onChange={(next) => {
+              // A different state makes the previous LGA invalid.
+              if (next !== field.value) clear('lgaOfOrigin');
+              field.onChange(next);
+            }}
+            error={errors.stateOfOrigin?.message}
+          />
+        )} />
+        <Controller control={control} name="lgaOfOrigin" render={({ field }) => (
+          <Combobox
+            label="LGA of origin"
+            hint={stateOfOrigin ? undefined : 'Choose your state of origin first.'}
+            placeholder={stateOfOrigin ? 'Type or choose an LGA' : 'Choose a state first'}
+            disabled={!stateOfOrigin}
+            options={originLgas.map((l) => ({ value: l, label: l }))}
+            emptyText="No LGA in this state matches. Check the spelling."
+            value={field.value}
+            onBlur={field.onBlur}
+            ref={field.ref}
+            onChange={field.onChange}
+            error={errors.lgaOfOrigin?.message}
+          />
+        )} />
+      </FieldGroup>
+
+      <FieldGroup title="Where you live and vote" description="This programme currently registers volunteers living in Lagos State.">
+        <TextField label="State of residence" value="Lagos State" readOnly disabled />
+        <Controller control={control} name="lga" render={({ field }) => (
+          <Combobox
+            label="LGA of residence"
+            placeholder="Type or choose your LGA"
+            options={LAGOS_AREAS.map((a) => ({ value: a.lga, label: a.lga }))}
+            value={field.value}
+            onBlur={field.onBlur}
+            ref={field.ref}
+            onChange={(next) => {
+              // Keep dependent selections consistent with the new LGA.
+              if (next !== field.value) clear('lcda', 'wardCode', 'ward', 'pollingUnitCode', 'pollingUnitName');
+              field.onChange(next);
+            }}
+            error={errors.lga?.message}
+          />
+        )} />
+        {lga && (
+          <SelectField
+            label="Local Council Development Area (LCDA)"
+            optional
+            hint={`Choose ${lga} if you live in the LGA's own core area, or pick your development area.`}
+            placeholder="I'm not sure"
+            options={[{ value: lga, label: `${lga} (LGA core area)` }, ...lcdas.map((l) => ({ value: l, label: l }))]}
+            error={errors.lcda?.message}
+            {...register('lcda')}
+          />
+        )}
+
+        {lga && wards.status === 'error' && <LoadError what="ward" onRetry={wards.retry} />}
+
+        {lga && unconfigured && (
+          <>
+            <Alert tone="info" title="Ward and polling unit lists are not available here yet">
+              The official lists for {lga} have not been added. You can type your ward if you know it and leave the polling unit for now.
+            </Alert>
+            <TextField label="Ward" optional hint="If you know your ward name or number." autoComplete="off" error={errors.ward?.message} {...register('ward')} />
+          </>
+        )}
+
+        {lga && (wards.status === 'loading' || configured) && (
+          <>
+            <Controller control={control} name="wardCode" render={({ field }) => (
+              <Combobox
+                label="Ward"
+                optional={configured && !required}
+                hint={configured ? `${wardOptions.length} wards in ${lga} (${titleCase(wards.data.senatorialDistrict)} senatorial district).` : undefined}
+                placeholder="Type or choose your ward"
+                loading={wards.status === 'loading'}
+                loadingText="Loading wards"
+                options={wardOptions}
+                value={field.value}
+                onBlur={field.onBlur}
+                ref={field.ref}
+                onChange={(next) => {
+                  if (next !== field.value) clear('pollingUnitCode', 'pollingUnitName');
+                  setValue('ward', wardOptions.find((w) => w.value === next)?.label ?? '');
+                  field.onChange(next);
+                }}
+                error={errors.wardCode?.message}
+              />
+            )} />
+            {units.status === 'error' ? <LoadError what="polling unit" onRetry={units.retry} /> : (
+              <Controller control={control} name="pollingUnitCode" render={({ field }) => (
+                <Combobox
+                  label="Polling unit"
+                  optional={configured && !required}
+                  hint={wardCode ? 'Search by name, or by the three-digit unit number shown on the right.' : 'Choose your ward first.'}
+                  placeholder={wardCode ? 'Type or choose your polling unit' : 'Choose a ward first'}
+                  disabled={!wardCode}
+                  loading={units.status === 'loading'}
+                  loadingText="Loading polling units"
+                  options={unitOptions}
+                  value={field.value}
+                  onBlur={field.onBlur}
+                  ref={field.ref}
+                  onChange={(next) => {
+                    setValue('pollingUnitName', unitOptions.find((u) => u.value === next)?.label ?? '');
+                    field.onChange(next);
+                  }}
+                  error={errors.pollingUnitCode?.message}
+                />
+              )} />
+            )}
+          </>
+        )}
+
+        <TextField label="Community or neighbourhood" optional placeholder="For example, Ikotun or Ebute Metta" autoComplete="off" hint="Helps us find activities near you. Please don't enter your street address." error={errors.community?.message} {...register('community')} />
+      </FieldGroup>
     </div>
   );
 }
@@ -212,11 +377,14 @@ function StepReview({ values, errors, control, onEdit }) {
         ['Phone', values.phone],
         ['Email', values.email || 'Not provided'],
         ['Contact by', labelFor(CONTACT_METHODS, values.contactMethod)],
+        ['Agent type', labelFor(AGENT_TYPES, values.agentType)],
       ]} />
-      <ReviewSection title="Where you live" step={1} onEdit={onEdit} rows={[
-        ['LGA', values.lga && `${values.lga}, Lagos State`],
+      <ReviewSection title="Where you are from and live" step={1} onEdit={onEdit} rows={[
+        ['Origin', values.lgaOfOrigin && `${values.lgaOfOrigin}, ${stateLabel(values.stateOfOrigin)}`],
+        ['Residence', values.lga && `${values.lga}, Lagos State`],
         ['LCDA', values.lcda],
-        ['Ward', values.ward],
+        ['Ward', values.ward && (values.wardCode ? `${values.ward} (${values.wardCode})` : values.ward)],
+        ['Polling unit', values.pollingUnitName && `${values.pollingUnitName} (${values.pollingUnitCode})`],
         ['Community', values.community],
       ]} />
       <ReviewSection title="How you can help" step={2} onEdit={onEdit} rows={[

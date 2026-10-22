@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import mongoose from 'mongoose';
 import { LGA_NAMES } from '../../../shared/lagos.js';
+import { STATE_NAMES } from '../../../shared/nigeria.js';
 import {
-  INTERESTS, SKILLS, CONTACT_METHODS, VOLUNTEER_STATUSES, OPPORTUNITY_STATUSES, valuesOf,
+  AGENT_TYPES, INTERESTS, SKILLS, CONTACT_METHODS, VOLUNTEER_STATUSES, OPPORTUNITY_STATUSES, valuesOf,
 } from '../../../shared/options.js';
-import { skillsSchema } from '../../../shared/schemas.js';
+import { skillsSchema, WARD_CODE_RE, POLLING_UNIT_CODE_RE } from '../../../shared/schemas.js';
 
 const objectId = z.string().refine((v) => mongoose.isValidObjectId(v), 'Invalid identifier');
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
@@ -21,12 +22,27 @@ export const volunteerQuerySchema = z.object({
   status: z.enum(valuesOf(VOLUNTEER_STATUSES)).optional(),
   lga: z.enum(LGA_NAMES).optional(),
   interest: z.enum(valuesOf(INTERESTS)).optional(),
+  agentType: z.enum([...valuesOf(AGENT_TYPES), 'none']).optional(),
+  stateOfOrigin: z.enum(STATE_NAMES).optional(),
+  lgaOfOrigin: z.string().trim().max(80).optional(),
+  senatorialDistrict: z.string().trim().max(80).optional(),
+  wardCode: z.string().regex(WARD_CODE_RE).optional(),
+  pollingUnitCode: z.string().regex(POLLING_UNIT_CODE_RE).optional(),
   from: isoDate.optional(),
   to: isoDate.optional(),
   sample: z.enum(['all', 'real', 'sample']).default('all'),
   sort: z.enum(['newest', 'oldest', 'name']).default('newest'),
   page,
   limit: z.coerce.number().int().min(5).max(100).default(20),
+});
+
+export const wardQuerySchema = z.object({
+  state: z.string().trim().min(1).max(40),
+  lga: z.string().trim().min(1).max(80),
+});
+
+export const pollingUnitQuerySchema = wardQuerySchema.extend({
+  ward: z.string().regex(WARD_CODE_RE, 'Choose a ward'),
 });
 
 export const statusChangeSchema = z.object({
@@ -114,7 +130,6 @@ export const verifyCodeSchema = z.object({ email, code: z.string().trim().regex(
 
 export const portalUpdateSchema = skillsSchema.partial().omit({ motivation: true }).extend({
   contactMethod: z.enum(valuesOf(CONTACT_METHODS)).optional(),
-  ward: z.string().trim().max(80).optional(),
   community: z.string().trim().max(80).optional(),
   consentCommunications: z.boolean().optional(),
 }).refine((d) => !d.interests || d.interests.length > 0, { path: ['interests'], message: 'Choose at least one area of interest' })

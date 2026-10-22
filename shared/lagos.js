@@ -1,9 +1,9 @@
 // Lagos State administrative areas.
 // 20 constitutionally recognised Local Government Areas (LGAs) and the
 // 37 Local Council Development Areas (LCDAs) created under them.
-// The programme team should verify this list (and add ward lists) before
-// production use. Ward lists are optional: when an LGA has no configured
-// wards, the ward field accepts free text.
+// The programme team should verify this list before production use.
+// Wards and polling units come from the official INEC dataset in
+// pollingunit/ (see server/src/services/electoral.js), not from this file.
 
 export const STATE = 'Lagos';
 
@@ -30,17 +30,10 @@ export const LAGOS_AREAS = [
   { lga: 'Surulere', lcdas: ['Coker-Aguda', 'Itire-Ikate'] },
 ];
 
-// Optional: configured ward lists keyed by LGA name, e.g. { Ikeja: ['Ward A', ...] }.
-export const LAGOS_WARDS = {};
-
 export const LGA_NAMES = LAGOS_AREAS.map((a) => a.lga);
 
 export function lcdasFor(lga) {
   return LAGOS_AREAS.find((a) => a.lga === lga)?.lcdas ?? [];
-}
-
-export function wardsFor(lga) {
-  return LAGOS_WARDS[lga] ?? [];
 }
 
 // An LCDA is valid if empty, if it names the LGA's own core area, or if it belongs to the LGA.
@@ -48,10 +41,4 @@ export function isValidLcda(lga, lcda) {
   if (!lcda) return true;
   if (lcda === lga) return true;
   return lcdasFor(lga).includes(lcda);
-}
-
-export function isValidWard(lga, ward) {
-  if (!ward) return true;
-  const list = wardsFor(lga);
-  return list.length === 0 || list.includes(ward);
 }

@@ -3,14 +3,20 @@ import { Link, useSearchParams } from 'react-router';
 import { Search, Download, X, Users } from 'lucide-react';
 import { useAdmin, can } from '../context.jsx';
 import { useFetch } from '../../lib/useFetch.js';
+import { get } from '../../lib/api.js';
+import { useConfig } from '../../lib/config.jsx';
 import { PageHeader, Pagination, th, td } from '../ui.jsx';
 import { StatusBadge, SampleBadge, ErrorState, EmptyState, Skeleton } from '../../components/ui/Feedback.jsx';
 import { buttonClass } from '../../components/ui/Button.jsx';
 import { formatDate, formatPhone, cx } from '../../lib/format.js';
-import { LGA_NAMES } from '../../../../shared/lagos.js';
-import { INTERESTS, VOLUNTEER_STATUSES, labelFor } from '../../../../shared/options.js';
+import { LGA_NAMES, STATE } from '../../../../shared/lagos.js';
+import { STATE_NAMES, lgasOfState, stateLabel } from '../../../../shared/nigeria.js';
+import { AGENT_TYPES, INTERESTS, VOLUNTEER_STATUSES, labelFor } from '../../../../shared/options.js';
 
-const FILTER_KEYS = ['q', 'status', 'lga', 'interest', 'from', 'to', 'sample', 'sort'];
+const FILTER_KEYS = ['q', 'status', 'agentType', 'lga', 'wardCode', 'pollingUnitCode', 'senatorialDistrict', 'stateOfOrigin', 'lgaOfOrigin', 'interest', 'from', 'to', 'sample', 'sort'];
+
+// Changing a parent filter clears the filters that depend on it.
+const DEPENDENTS = { lga: ['wardCode', 'pollingUnitCode'], wardCode: ['pollingUnitCode'], stateOfOrigin: ['lgaOfOrigin'] };
 const selectCls = 'h-10 rounded-[10px] border border-line-strong bg-white px-3 text-sm text-ink focus:border-forest-900 focus:outline-none focus:ring-3 focus:ring-gold-500/45';
 
 export default function Volunteers() {
@@ -20,6 +26,13 @@ export default function Volunteers() {
   const query = params.toString();
 
   const { data, meta, loading, error, reload } = useFetch((signal) => api.get(`/volunteers?${query}`, { signal }), query);
+  const config = useConfig();
+  const lga = params.get('lga') ?? '';
+  const wardCode = params.get('wardCode') ?? '';
+  const stateOfOrigin = params.get('stateOfOrigin') ?? '';
+  const wards = useFetch((signal) => (lga ? get(`/locations/wards?state=${STATE}&lga=${encodeURIComponent(lga)}`, { signal }) : null), lga);
+  const units = useFetch((signal) => (lga && wardCode ? get(`/locations/polling-units?state=${STATE}&lga=${encodeURIComponent(lga)}&ward=${wardCode}`, { signal }) : null), `${lga}|${wardCode}`);
+  const wardList = wards.data?.configured ? wards.data.wards : [];
 
   // Debounced search box.
   useEffect(() => {
@@ -31,7 +44,10 @@ export default function Volunteers() {
 
   function update(changes) {
     const next = new URLSearchParams(params);
-    Object.entries(changes).forEach(([k, v]) => (v ? next.set(k, v) : next.delete(k)));
+    Object.entries(changes).forEach(([k, v]) => {
+      if (v) next.set(k, v); else next.delete(k);
+      (DEPENDENTS[k] ?? []).forEach((d) => next.delete(d));
+    });
     if (!('page' in changes)) next.delete('page');
     setParams(next, { replace: true });
   }
@@ -56,7 +72,7 @@ export default function Volunteers() {
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
             <label htmlFor="vol-search" className="sr-only">Search volunteers</label>
-            <input id="vol-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by reference, name, phone or email" className="h-11 w-full rounded-[10px] border border-line-strong bg-white pl-9 pr-3 text-[15px] focus:border-forest-900 focus:outline-none focus:ring-3 focus:ring-gold-500/45" />
+            <input id="vol-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by reference, name, phone, email or polling unit code" className="h-11 w-full rounded-[10px] border border-line-strong bg-white pl-9 pr-3 text-[15px] focus:border-forest-900 focus:outline-none focus:ring-3 focus:ring-gold-500/45" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="sr-only" htmlFor="f-status">Status</label>
@@ -64,10 +80,41 @@ export default function Volunteers() {
               <option value="">All statuses</option>
               {VOLUNTEER_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
-            <label className="sr-only" htmlFor="f-lga">LGA</label>
-            <select id="f-lga" className={selectCls} value={params.get('lga') ?? ''} onChange={(e) => update({ lga: e.target.value })}>
+            <label className="sr-only" htmlFor="f-agent">Agent type</label>
+            <select id="f-agent" className={selectCls} value={params.get('agentType') ?? ''} onChange={(e) => update({ agentType: e.target.value })}>
+              <option value="">All agent types</option>
+              {AGENT_TYPES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+              <option value="none">Not recorded</option>
+            </select>
+            <label className="sr-only" htmlFor="f-lga">LGA of residence</label>
+            <select id="f-lga" className={selectCls} value={lga} onChange={(e) => update({ lga: e.target.value })}>
               <option value="">All LGAs</option>
               {LGA_NAMES.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <label className="sr-only" htmlFor="f-ward">Ward</label>
+            <select id="f-ward" className={cx(selectCls, 'max-w-[220px]')} value={wardCode} disabled={!wardList.length} onChange={(e) => update({ wardCode: e.target.value })}>
+              <option value="">{!lga ? 'Choose an LGA for wards' : wards.loading ? 'Loading wards…' : wardList.length ? 'All wards' : 'No ward data'}</option>
+              {wardList.map((w) => <option key={w.code} value={w.code}>{w.name}</option>)}
+            </select>
+            <label className="sr-only" htmlFor="f-pu">Polling unit</label>
+            <select id="f-pu" className={cx(selectCls, 'max-w-[240px]')} value={params.get('pollingUnitCode') ?? ''} disabled={!units.data?.length} onChange={(e) => update({ pollingUnitCode: e.target.value })}>
+              <option value="">{!wardCode ? 'Choose a ward for polling units' : units.loading ? 'Loading polling units…' : 'All polling units'}</option>
+              {(units.data ?? []).map((u) => <option key={u.code} value={u.code}>{u.code.slice(-3)} · {u.name}</option>)}
+            </select>
+            <label className="sr-only" htmlFor="f-senatorial">Senatorial district</label>
+            <select id="f-senatorial" className={selectCls} value={params.get('senatorialDistrict') ?? ''} onChange={(e) => update({ senatorialDistrict: e.target.value })}>
+              <option value="">All senatorial districts</option>
+              {(config.senatorialDistricts ?? []).map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <label className="sr-only" htmlFor="f-origin">State of origin</label>
+            <select id="f-origin" className={selectCls} value={stateOfOrigin} onChange={(e) => update({ stateOfOrigin: e.target.value })}>
+              <option value="">All states of origin</option>
+              {STATE_NAMES.map((st) => <option key={st} value={st}>{stateLabel(st)}</option>)}
+            </select>
+            <label className="sr-only" htmlFor="f-origin-lga">LGA of origin</label>
+            <select id="f-origin-lga" className={selectCls} value={params.get('lgaOfOrigin') ?? ''} disabled={!stateOfOrigin} onChange={(e) => update({ lgaOfOrigin: e.target.value })}>
+              <option value="">{stateOfOrigin ? 'All LGAs of origin' : 'Choose a state of origin'}</option>
+              {lgasOfState(stateOfOrigin).map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
             <label className="sr-only" htmlFor="f-interest">Interest</label>
             <select id="f-interest" className={selectCls} value={params.get('interest') ?? ''} onChange={(e) => update({ interest: e.target.value })}>
@@ -112,10 +159,10 @@ export default function Volunteers() {
           </div>
         ) : (
           <div className={cx('overflow-x-auto transition-opacity', loading && 'opacity-60')} aria-busy={loading}>
-            <table className="w-full min-w-[820px]">
+            <table className="w-full min-w-[1020px]">
               <caption className="sr-only">Volunteer applications</caption>
               <thead className="border-b border-line bg-paper">
-                <tr><th scope="col" className={th}>Reference</th><th scope="col" className={th}>Name</th><th scope="col" className={th}>Phone</th><th scope="col" className={th}>LGA</th><th scope="col" className={th}>Interests</th><th scope="col" className={th}>Status</th><th scope="col" className={th}>Registered</th></tr>
+                <tr><th scope="col" className={th}>Reference</th><th scope="col" className={th}>Name</th><th scope="col" className={th}>Phone</th><th scope="col" className={th}>Agent type</th><th scope="col" className={th}>LGA</th><th scope="col" className={th}>Ward</th><th scope="col" className={th}>Interests</th><th scope="col" className={th}>Status</th><th scope="col" className={th}>Registered</th></tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {data.map((v) => (
@@ -125,7 +172,9 @@ export default function Volunteers() {
                     </td>
                     <td className={td}><span className="flex items-center gap-2 font-medium">{v.firstName} {v.lastName}{v.isSample && <SampleBadge />}</span></td>
                     <td className={`${td} whitespace-nowrap text-slate-600 tabular`}>{formatPhone(v.phone)}</td>
+                    <td className={`${td} whitespace-nowrap`}>{v.agentType ? labelFor(AGENT_TYPES, v.agentType) : <span className="text-slate-400">Not recorded</span>}</td>
                     <td className={td}>{v.lga}</td>
+                    <td className={`${td} max-w-[180px] truncate text-slate-600`} title={v.ward}>{v.ward ?? <span className="text-slate-400">–</span>}</td>
                     <td className={`${td} max-w-[220px] truncate text-slate-600`}>{v.interests.map((i) => labelFor(INTERESTS, i)).join(', ')}</td>
                     <td className={td}><StatusBadge status={v.status} /></td>
                     <td className={`${td} whitespace-nowrap text-slate-500`}>{formatDate(v.createdAt)}</td>

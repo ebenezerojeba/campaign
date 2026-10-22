@@ -1,5 +1,5 @@
 import { env } from '../config/env.js';
-import { labelFor, INTERESTS } from '../../../shared/options.js';
+import { labelFor, INTERESTS, AGENT_TYPES } from '../../../shared/options.js';
 
 const esc = (s = '') => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -83,6 +83,8 @@ ${approved
 export function adminAlert(v) {
   const url = `${env.frontendUrl}/admin/volunteers/${v._id}`;
   const interests = (v.interests || []).map((i) => labelFor(INTERESTS, i)).join(', ');
+  const agent = v.agentType ? labelFor(AGENT_TYPES, v.agentType) : 'Not recorded';
+  const ward = v.ward ? `${v.ward}${v.wardCode ? ` (${v.wardCode})` : ''}` : 'Not recorded';
   return {
     subject: `New volunteer registration: ${v.reference} (${v.lga})`,
     html: layout({
@@ -90,12 +92,14 @@ export function adminAlert(v) {
       heading: 'New volunteer registration',
       bodyHtml:
         refBlock(v.reference) +
-        p(`<strong>LGA:</strong> ${esc(v.lga)}<br><strong>Interests:</strong> ${esc(interests)}`) +
+        p(`<strong>Agent type:</strong> ${esc(agent)}<br><strong>LGA:</strong> ${esc(v.lga)}<br><strong>Ward:</strong> ${esc(ward)}<br><strong>Interests:</strong> ${esc(interests)}`) +
         p('Personal details are only shown in the admin dashboard.'),
       cta: { href: url, label: 'Review application' },
     }),
     text: `New volunteer registration ${v.reference}
+Agent type: ${agent}
 LGA: ${v.lga}
+Ward: ${ward}
 Interests: ${interests}
 
 Review: ${url}`,

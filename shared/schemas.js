@@ -1,9 +1,10 @@
 // Validation schemas shared by the browser form and the API.
 // The server re-validates every request with these exact rules.
 import { z } from 'zod';
-import { STATE, LGA_NAMES, isValidLcda, isValidWard } from './lagos.js';
+import { STATE, LGA_NAMES, isValidLcda } from './lagos.js';
+import { STATE_NAMES, isValidStateLga } from './nigeria.js';
 import {
-  CONTACT_METHODS, INTERESTS, SKILLS, AVAILABILITY, PARTICIPATION_FORMATS, valuesOf,
+  CONTACT_METHODS, AGENT_TYPES, INTERESTS, SKILLS, AVAILABILITY, PARTICIPATION_FORMATS, valuesOf,
 } from './options.js';
 
 const NAME_RE = /^[\p{L}][\p{L}\p{M}' .-]*$/u;
@@ -41,14 +42,28 @@ export const personalSchema = z.object({
   email: z.union([z.literal(''), z.string().trim().toLowerCase().email('Enter a valid email address').max(120)]).optional().default(''),
   phone: phoneSchema,
   contactMethod: oneOf(CONTACT_METHODS, 'Choose how we should contact you'),
+  agentType: oneOf(AGENT_TYPES, 'Choose your agent type'),
 });
 
+export const WARD_CODE_RE = /^\d{2}-\d{2}$/;
+export const POLLING_UNIT_CODE_RE = /^\d{2}-\d{2}-\d{2}-\d{3}$/;
+
 export const locationSchema = z.object({
+  stateOfOrigin: z.enum(STATE_NAMES, { errorMap: () => ({ message: 'Choose your state of origin' }) }),
+  lgaOfOrigin: z.string({ required_error: 'Choose your LGA of origin' }).trim().min(1, 'Choose your LGA of origin').max(80),
   state: z.literal(STATE, { errorMap: () => ({ message: 'This programme registers volunteers in Lagos State' }) }),
   lga: z.enum(LGA_NAMES, { errorMap: () => ({ message: 'Choose your Local Government Area' }) }),
   lcda: trimmed(60).optional().default(''),
+  // Ward and polling unit are chosen by INEC code. The server checks both
+  // against the official dataset and stores the names from that data.
+  wardCode: z.union([z.literal(''), z.string().regex(WARD_CODE_RE, 'Choose your ward')]).optional().default(''),
+  pollingUnitCode: z.union([z.literal(''), z.string().regex(POLLING_UNIT_CODE_RE, 'Choose your polling unit')]).optional().default(''),
+  // Free-text ward, accepted only where no official ward data is configured.
   ward: trimmed(80).optional().default(''),
   community: trimmed(80).optional().default(''),
+  // Set by the form when official ward data is loaded for the chosen LGA, so
+  // the browser can require the fields. The server decides independently.
+  electoralRequired: z.boolean().optional().default(false),
 });
 
 export const skillsSchema = z.object({
@@ -73,11 +88,17 @@ function refinePersonal(data, ctx) {
 }
 
 function refineLocation(data, ctx) {
+  if (data.stateOfOrigin && data.lgaOfOrigin && !isValidStateLga(data.stateOfOrigin, data.lgaOfOrigin)) {
+    ctx.addIssue({ code: 'custom', path: ['lgaOfOrigin'], message: `Choose an LGA in ${data.stateOfOrigin}` });
+  }
+  if (data.electoralRequired && !data.wardCode) {
+    ctx.addIssue({ code: 'custom', path: ['wardCode'], message: 'Choose your ward' });
+  }
+  if (data.electoralRequired && !data.pollingUnitCode) {
+    ctx.addIssue({ code: 'custom', path: ['pollingUnitCode'], message: 'Choose your polling unit' });
+  }
   if (data.lga && !isValidLcda(data.lga, data.lcda)) {
     ctx.addIssue({ code: 'custom', path: ['lcda'], message: `This development area is not part of ${data.lga} LGA` });
-  }
-  if (data.lga && !isValidWard(data.lga, data.ward)) {
-    ctx.addIssue({ code: 'custom', path: ['ward'], message: `Choose a ward in ${data.lga} LGA` });
   }
 }
 

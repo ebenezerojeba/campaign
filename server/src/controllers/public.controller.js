@@ -7,6 +7,7 @@ import { generateReference } from '../utils/reference.js';
 import { normalisePhone } from '../../../shared/schemas.js';
 import { PRIVACY_NOTICE_VERSION, labelFor, VOLUNTEER_STATUSES } from '../../../shared/options.js';
 import { sendRegistrationEmails } from '../services/email.js';
+import { resolveElectoral, wardsFor, pollingUnitsFor, senatorialDistricts } from '../services/electoral.js';
 
 export async function health(_req, res) {
   let db = dbState();
@@ -24,6 +25,7 @@ export async function publicConfig(_req, res) {
     demoMode: env.demoMode,
     contact: env.contact,
     privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
+    senatorialDistricts: senatorialDistricts(),
   });
 }
 
@@ -73,6 +75,10 @@ export async function register(req, res) {
   const phone = normalisePhone(data.phone);
   const email = data.email || undefined;
 
+  // Never trust the browser's ward or polling unit: check both against the official data.
+  const electoral = resolveElectoral(data);
+  if (electoral.errors) throw new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields: electoral.errors });
+
   const existing = await Volunteer.exists({ $or: [{ phone }, ...(email ? [{ email }] : [])] });
   if (existing) throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
 
@@ -82,10 +88,13 @@ export async function register(req, res) {
     email,
     phone,
     contactMethod: data.contactMethod,
+    agentType: data.agentType,
+    stateOfOrigin: data.stateOfOrigin,
+    lgaOfOrigin: data.lgaOfOrigin,
     state: data.state,
     lga: data.lga,
     lcda: data.lcda || undefined,
-    ward: data.ward || undefined,
+    ...electoral.fields,
     community: data.community || undefined,
     interests: [...new Set(data.interests)],
     skills: [...new Set(data.skills)],
@@ -131,6 +140,24 @@ export async function register(req, res) {
     contactMethod: volunteer.contactMethod,
     confirmationEmail: confirmation?.status ?? 'skipped',
   }, undefined, 201);
+}
+
+// Official ward and polling-unit options. `configured: false` means no data
+// has been supplied for that area; the form shows that instead of options.
+const LOCATION_CACHE = 'public, max-age=3600';
+
+export async function listWards(req, res) {
+  const { state, lga } = req.validatedQuery;
+  res.setHeader('Cache-Control', LOCATION_CACHE);
+  send(res, wardsFor(state, lga));
+}
+
+export async function listPollingUnits(req, res) {
+  const { state, lga, ward } = req.validatedQuery;
+  const items = pollingUnitsFor(state, lga, ward);
+  if (!items) throw ApiError.notFound('No polling units are configured for this ward');
+  res.setHeader('Cache-Control', LOCATION_CACHE);
+  send(res, items);
 }
 
 // Requires both the reference and the registered phone number, and returns

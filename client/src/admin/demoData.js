@@ -2,6 +2,7 @@
 // used only when no database is connected. Every record is fictional, uses a
 // DEMO- reference and an example.com address, and is labelled as sample data.
 import { LAGOS_AREAS, LGA_NAMES } from '../../../shared/lagos.js';
+import { STATE_NAMES, lgasOfState } from '../../../shared/nigeria.js';
 import { INTERESTS, SKILLS, AVAILABILITY, labelFor, valuesOf } from '../../../shared/options.js';
 import { ApiError } from '../lib/api.js';
 
@@ -35,10 +36,12 @@ const volunteers = Array.from({ length: 164 }, (_, i) => {
   const status = (now - created) / 86400000 < 3 ? 'pending' : r < 0.6 ? 'approved' : r < 0.8 ? 'pending' : 'rejected';
   const firstName = pick(FIRST);
   const lastName = pick(LAST);
+  const origin = rand() < 0.45 ? 'Lagos' : pick(STATE_NAMES);
   return {
     _id: `demo-vol-${i}`, reference: ref(), firstName, lastName,
     email: rand() < 0.7 ? `${firstName}.${lastName}.${i}@example.com`.toLowerCase() : undefined,
     phone: `+23480${String(10000000 + i * 7919).slice(-8)}`, contactMethod: pick(['whatsapp', 'sms', 'call']),
+    agentType: pick(['agent_1', 'agent_2']), stateOfOrigin: origin, lgaOfOrigin: pick(lgasOfState(origin)),
     state: 'Lagos', lga, lcda: rand() < 0.5 ? pick(LAGOS_AREAS.find((a) => a.lga === lga).lcdas) : undefined,
     interests: some(valuesOf(INTERESTS), 1, 3), skills: some(valuesOf(SKILLS), 0, 3), availability: some(valuesOf(AVAILABILITY), 1, 2),
     participationFormat: pick(['in_person', 'remote', 'either']), status, isSample: true,
@@ -68,7 +71,7 @@ function listVolunteers(params) {
   let items = volunteers;
   const q = params.get('q')?.toLowerCase();
   if (q) items = items.filter((v) => `${v.reference} ${v.firstName} ${v.lastName} ${v.email ?? ''} ${v.phone}`.toLowerCase().includes(q));
-  for (const key of ['status', 'lga']) if (params.get(key)) items = items.filter((v) => v[key] === params.get(key));
+  for (const key of ['status', 'lga', 'agentType', 'stateOfOrigin', 'lgaOfOrigin']) if (params.get(key)) items = items.filter((v) => v[key] === params.get(key));
   if (params.get('interest')) items = items.filter((v) => v.interests.includes(params.get('interest')));
   if (params.get('sort') === 'oldest') items = [...items].reverse();
   if (params.get('sort') === 'name') items = [...items].sort((a, b) => a.lastName.localeCompare(b.lastName));

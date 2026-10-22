@@ -11,8 +11,9 @@ import { useToast } from '../../components/ui/Toast.jsx';
 import { formatDate, formatDateTime, formatPhone, relativeTime } from '../../lib/format.js';
 import { whatsappLink } from '../../lib/config.jsx';
 import {
-  INTERESTS, SKILLS, AVAILABILITY, CONTACT_METHODS, PARTICIPATION_FORMATS, labelFor,
+  AGENT_TYPES, INTERESTS, SKILLS, AVAILABILITY, CONTACT_METHODS, PARTICIPATION_FORMATS, labelFor,
 } from '../../../../shared/options.js';
+import { stateLabel } from '../../../../shared/nigeria.js';
 
 const ACTIONS = {
   approved: { label: 'Approve application', verb: 'Approve', icon: CircleCheck, variant: 'primary', body: 'The volunteer will be able to register interest in activities and sign in to their volunteer account.' },
@@ -212,7 +213,12 @@ export default function VolunteerDetail() {
               </Row>
               <Row label="Email">{v.email && <a href={`mailto:${v.email}`} className="inline-flex items-center gap-1.5 hover:underline"><Mail className="size-4 text-slate-400" aria-hidden />{v.email}</a>}</Row>
               <Row label="Contact by">{labelFor(CONTACT_METHODS, v.contactMethod)}</Row>
-              <Row label="Location">{[v.community, v.ward && `Ward: ${v.ward}`, v.lcda && v.lcda !== v.lga ? `${v.lcda} LCDA` : null, `${v.lga} LGA`].filter(Boolean).join(', ')}</Row>
+              <Row label="Agent type">{v.agentType ? labelFor(AGENT_TYPES, v.agentType) : <span className="text-slate-500">Not recorded</span>}</Row>
+              <Row label="Origin">{v.lgaOfOrigin ? `${v.lgaOfOrigin} LGA, ${stateLabel(v.stateOfOrigin)}` : <span className="text-slate-500">Not recorded</span>}</Row>
+              <Row label="Residence">{[v.community, v.lcda && v.lcda !== v.lga ? `${v.lcda} LCDA` : null, `${v.lga} LGA`, `${v.state ?? 'Lagos'} State`].filter(Boolean).join(', ')}</Row>
+              <Row label="Senatorial district">{v.senatorialDistrict}</Row>
+              <Row label="Ward">{v.ward && <>{v.ward}{v.wardCode && <span className="ml-1.5 text-sm text-slate-500 tabular">{v.wardCode}</span>}</>}</Row>
+              <Row label="Polling unit">{v.pollingUnit && <>{v.pollingUnit}<span className="ml-1.5 font-mono text-sm text-slate-500">{v.pollingUnitCode}</span></>}</Row>
               <Row label="Interests"><Chips list={INTERESTS} values={v.interests} /></Row>
               <Row label="Skills">{v.skills.length > 0 && <Chips list={SKILLS} values={v.skills} />}</Row>
               <Row label="Availability">{v.availability.map((a) => labelFor(AVAILABILITY, a)).join(', ')}</Row>

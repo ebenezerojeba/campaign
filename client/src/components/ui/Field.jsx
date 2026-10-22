@@ -2,11 +2,11 @@ import { forwardRef, useId } from 'react';
 import { AlertCircle, Check } from 'lucide-react';
 import { cx } from '../../lib/format.js';
 
-const inputBase =
+export const inputBase =
   'block w-full rounded-[10px] border bg-white px-3.5 text-[16px] text-ink placeholder:text-slate-400 transition-colors ' +
   'focus:outline-none focus:ring-3 focus:ring-gold-500/45 focus:border-forest-900 disabled:bg-mist disabled:text-slate-500';
 
-const borderFor = (error) => (error ? 'border-danger-700' : 'border-line-strong hover:border-slate-400');
+export const borderFor = (error) => (error ? 'border-danger-700' : 'border-line-strong hover:border-slate-400');
 
 export function FieldShell({ id, label, hint, error, optional, children, className }) {
   return (
@@ -33,7 +33,7 @@ export function FieldError({ id, children }) {
   );
 }
 
-const describedBy = (id, hint, error) => [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
+export const describedBy = (id, hint, error) => [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined;
 
 export const TextField = forwardRef(function TextField({ label, hint, error, optional, className, inputClassName, prefix, ...props }, ref) {
   const autoId = useId();

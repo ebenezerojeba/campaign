@@ -1,0 +1,1429 @@
+{
+ "state": "Lagos",
+ "state_code": "24",
+ "totals": {
+  "senatorial_districts": 4,
+  "lgas": 20,
+  "wards": 245,
+  "polling_units": 13325
+ },
+ "senatorial_districts": [
+  {
+   "senatorial_district": "LAGOS WEST I",
+   "lga_count": 6,
+   "ward_count": 68,
+   "pu_count": 5424,
+   "lgas": [
+    {
+     "lga": "AGEGE",
+     "lga_code": "01",
+     "ward_count": 11,
+     "pu_count": 696,
+     "wards": [
+      {
+       "ward": "ISALE/IDIMANGORO",
+       "ward_code": "01-01",
+       "pu_count": 58
+      },
+      {
+       "ward": "ILORO/ONIPETESI",
+       "ward_code": "01-02",
+       "pu_count": 39
+      },
+      {
+       "ward": "ONIWAYA/PAPA-UKU",
+       "ward_code": "01-03",
+       "pu_count": 95
+      },
+      {
+       "ward": "AGBOTIKUYO/DOPEMU",
+       "ward_code": "01-04",
+       "pu_count": 91
+      },
+      {
+       "ward": "OYEWOLE/PAPA ASHAFA",
+       "ward_code": "01-05",
+       "pu_count": 43
+      },
+      {
+       "ward": "OKEKOTO",
+       "ward_code": "01-06",
+       "pu_count": 75
+      },
+      {
+       "ward": "KEKE",
+       "ward_code": "01-07",
+       "pu_count": 58
+      },
+      {
+       "ward": "DAROCHA",
+       "ward_code": "01-08",
+       "pu_count": 49
+      },
+      {
+       "ward": "TABON TABON/OKO OBA",
+       "ward_code": "01-09",
+       "pu_count": 64
+      },
+      {
+       "ward": "ORILE AGEGE/OKO OBA",
+       "ward_code": "01-10",
+       "pu_count": 69
+      },
+      {
+       "ward": "ISALE ODO",
+       "ward_code": "01-11",
+       "pu_count": 55
+      }
+     ]
+    },
+    {
+     "lga": "ALIMOSHO",
+     "lga_code": "03",
+     "ward_count": 11,
+     "pu_count": 1545,
+     "wards": [
+      {
+       "ward": "SHASHA/AKOWONJO",
+       "ward_code": "03-01",
+       "pu_count": 142
+      },
+      {
+       "ward": "EGBEDA/ALIMOSHO",
+       "ward_code": "03-02",
+       "pu_count": 117
+      },
+      {
+       "ward": "IDIMU/ISHERI OLOFIN",
+       "ward_code": "03-03",
+       "pu_count": 134
+      },
+      {
+       "ward": "IKOTUN/IJEGUN",
+       "ward_code": "03-04",
+       "pu_count": 282
+      },
+      {
+       "ward": "EGBE/AGODO",
+       "ward_code": "03-05",
+       "pu_count": 114
+      },
+      {
+       "ward": "IGANDO/EGAN",
+       "ward_code": "03-06",
+       "pu_count": 120
+      },
+      {
+       "ward": "IPAJA NORTH",
+       "ward_code": "03-07",
+       "pu_count": 163
+      },
+      {
+       "ward": "IPAJA SOUTH",
+       "ward_code": "03-08",
+       "pu_count": 118
+      },
+      {
+       "ward": "AYOBO/IJON VILLAGE (CAMP DAVID)",
+       "ward_code": "03-09",
+       "pu_count": 68
+      },
+      {
+       "ward": "PLEASURE/OKE-ODO",
+       "ward_code": "03-10",
+       "pu_count": 105
+      },
+      {
+       "ward": "ABULE-EGBA/ABORU/MEIRAN/ALAGBADO",
+       "ward_code": "03-11",
+       "pu_count": 182
+      }
+     ]
+    },
+    {
+     "lga": "IFAKO-IJAYE",
+     "lga_code": "10",
+     "ward_count": 11,
+     "pu_count": 761,
+     "wards": [
+      {
+       "ward": "IJAYE",
+       "ward_code": "10-01",
+       "pu_count": 39
+      },
+      {
+       "ward": "OLD IFAKO/KARAOLE",
+       "ward_code": "10-02",
+       "pu_count": 47
+      },
+      {
+       "ward": "NEW IFAKO/OYEMEKUN",
+       "ward_code": "10-03",
+       "pu_count": 82
+      },
+      {
+       "ward": "FAGBA/AKUTE ROAD",
+       "ward_code": "10-04",
+       "pu_count": 30
+      },
+      {
+       "ward": "IJU ISAGA",
+       "ward_code": "10-05",
+       "pu_count": 72
+      },
+      {
+       "ward": "IJU-OBAWOLE",
+       "ward_code": "10-06",
+       "pu_count": 58
+      },
+      {
+       "ward": "PAMADA/ABULE-EGBA",
+       "ward_code": "10-07",
+       "pu_count": 57
+      },
+      {
+       "ward": "IJAIYE/OJOKORO",
+       "ward_code": "10-08",
+       "pu_count": 160
+      },
+      {
+       "ward": "IJAIYE/AGBADO/KOLLINGTON",
+       "ward_code": "10-09",
+       "pu_count": 120
+      },
+      {
+       "ward": "ALAKUKO/KOLLINGTON",
+       "ward_code": "10-10",
+       "pu_count": 47
+      },
+      {
+       "ward": "AJEGUNLE/AKINDE/ANIMASHAUN",
+       "ward_code": "10-11",
+       "pu_count": 49
+      }
+     ]
+    },
+    {
+     "lga": "IKEJA",
+     "lga_code": "11",
+     "ward_count": 10,
+     "pu_count": 667,
+     "wards": [
+      {
+       "ward": "ANIFOWOSHE/IKEJA",
+       "ward_code": "11-01",
+       "pu_count": 47
+      },
+      {
+       "ward": "OJODU/AGIDINGBI/OMOLE",
+       "ward_code": "11-02",
+       "pu_count": 121
+      },
+      {
+       "ward": "ALAUSA/OREGUN/OLUSOSUN",
+       "ward_code": "11-03",
+       "pu_count": 86
+      },
+      {
+       "ward": "AIRPORT/ONIPETESI/ONILEKERE",
+       "ward_code": "11-04",
+       "pu_count": 37
+      },
+      {
+       "ward": "IPODO/SERIKI ARO",
+       "ward_code": "11-05",
+       "pu_count": 78
+      },
+      {
+       "ward": "ADEKUNLE VILL./ADENIYI JONES/OGBA",
+       "ward_code": "11-06",
+       "pu_count": 38
+      },
+      {
+       "ward": "OKE-IRA/AGUDA",
+       "ward_code": "11-07",
+       "pu_count": 100
+      },
+      {
+       "ward": "ONIGBONGBO/MILITARY CANTONMENT",
+       "ward_code": "11-08",
+       "pu_count": 51
+      },
+      {
+       "ward": "GRA/POLICE BARRACKS",
+       "ward_code": "11-09",
+       "pu_count": 49
+      },
+      {
+       "ward": "WASIMI/OPEBI/ALLEN",
+       "ward_code": "11-10",
+       "pu_count": 60
+      }
+     ]
+    },
+    {
+     "lga": "MUSHIN",
+     "lga_code": "16",
+     "ward_count": 14,
+     "pu_count": 865,
+     "wards": [
+      {
+       "ward": "ALAKARA",
+       "ward_code": "16-01",
+       "pu_count": 29
+      },
+      {
+       "ward": "IDI-ORO/ODI-OLOWU",
+       "ward_code": "16-02",
+       "pu_count": 34
+      },
+      {
+       "ward": "BABALOSA",
+       "ward_code": "16-03",
+       "pu_count": 35
+      },
+      {
+       "ward": "OJUWOYE",
+       "ward_code": "16-04",
+       "pu_count": 40
+      },
+      {
+       "ward": "ILUPEJU",
+       "ward_code": "16-05",
+       "pu_count": 62
+      },
+      {
+       "ward": "OLATEJU",
+       "ward_code": "16-06",
+       "pu_count": 30
+      },
+      {
+       "ward": "KAYODE/FADEYI",
+       "ward_code": "16-07",
+       "pu_count": 50
+      },
+      {
+       "ward": "MUSHIN/ATEWOLARA",
+       "ward_code": "16-08",
+       "pu_count": 83
+      },
+      {
+       "ward": "PAPA-AJAO",
+       "ward_code": "16-09",
+       "pu_count": 64
+      },
+      {
+       "ward": "ILASAMAJA",
+       "ward_code": "16-10",
+       "pu_count": 105
+      },
+      {
+       "ward": "BABALOSA/IDI-ARABA",
+       "ward_code": "16-11",
+       "pu_count": 95
+      },
+      {
+       "ward": "IDI-ARABA",
+       "ward_code": "16-12",
+       "pu_count": 62
+      },
+      {
+       "ward": "ITIRE",
+       "ward_code": "16-13",
+       "pu_count": 153
+      },
+      {
+       "ward": "ILUPEJU INDUSTRIAL ESTATE",
+       "ward_code": "16-14",
+       "pu_count": 23
+      }
+     ]
+    },
+    {
+     "lga": "OSHODI/ISOLO",
+     "lga_code": "18",
+     "ward_count": 11,
+     "pu_count": 890,
+     "wards": [
+      {
+       "ward": "OSHODI/BOLADE",
+       "ward_code": "18-01",
+       "pu_count": 101
+      },
+      {
+       "ward": "ORILE-OSHODI",
+       "ward_code": "18-02",
+       "pu_count": 112
+      },
+      {
+       "ward": "ISOLO",
+       "ward_code": "18-03",
+       "pu_count": 77
+      },
+      {
+       "ward": "AJAO ESTATE",
+       "ward_code": "18-04",
+       "pu_count": 36
+      },
+      {
+       "ward": "ILASAMAJA",
+       "ward_code": "18-05",
+       "pu_count": 76
+      },
+      {
+       "ward": "MAFOLUKU",
+       "ward_code": "18-06",
+       "pu_count": 65
+      },
+      {
+       "ward": "SOGUNLE",
+       "ward_code": "18-07",
+       "pu_count": 34
+      },
+      {
+       "ward": "SOGUNLE/ALASIA",
+       "ward_code": "18-08",
+       "pu_count": 53
+      },
+      {
+       "ward": "OKOTA",
+       "ward_code": "18-09",
+       "pu_count": 92
+      },
+      {
+       "ward": "ISHAGATEDO",
+       "ward_code": "18-10",
+       "pu_count": 58
+      },
+      {
+       "ward": "OKE-AFA/EJIGBO",
+       "ward_code": "18-11",
+       "pu_count": 186
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "senatorial_district": "LAGOS WEST II",
+   "lga_count": 4,
+   "ward_count": 44,
+   "pu_count": 2365,
+   "lgas": [
+    {
+     "lga": "AJEROMI/IFELODUN",
+     "lga_code": "02",
+     "ward_count": 11,
+     "pu_count": 734,
+     "wards": [
+      {
+       "ward": "AGO HAUSA",
+       "ward_code": "02-01",
+       "pu_count": 87
+      },
+      {
+       "ward": "AWODI-ORA",
+       "ward_code": "02-02",
+       "pu_count": 67
+      },
+      {
+       "ward": "WILMER",
+       "ward_code": "02-03",
+       "pu_count": 53
+      },
+      {
+       "ward": "OLODI",
+       "ward_code": "02-04",
+       "pu_count": 61
+      },
+      {
+       "ward": "TOLU",
+       "ward_code": "02-05",
+       "pu_count": 102
+      },
+      {
+       "ward": "TEMIDIRE I",
+       "ward_code": "02-06",
+       "pu_count": 39
+      },
+      {
+       "ward": "OJO ROAD",
+       "ward_code": "02-07",
+       "pu_count": 87
+      },
+      {
+       "ward": "LAYENI",
+       "ward_code": "02-08",
+       "pu_count": 68
+      },
+      {
+       "ward": "ALABA ORO",
+       "ward_code": "02-09",
+       "pu_count": 60
+      },
+      {
+       "ward": "MOSAFEJO",
+       "ward_code": "02-10",
+       "pu_count": 69
+      },
+      {
+       "ward": "TEMIDIRE II",
+       "ward_code": "02-11",
+       "pu_count": 41
+      }
+     ]
+    },
+    {
+     "lga": "AMUWO-ODOFIN",
+     "lga_code": "04",
+     "ward_count": 11,
+     "pu_count": 637,
+     "wards": [
+      {
+       "ward": "AMUWO-ODOFIN HOUSING ESTATE, MILE 2",
+       "ward_code": "04-01",
+       "pu_count": 81
+      },
+      {
+       "ward": "FESTAC 1",
+       "ward_code": "04-02",
+       "pu_count": 65
+      },
+      {
+       "ward": "FESTAC II",
+       "ward_code": "04-03",
+       "pu_count": 80
+      },
+      {
+       "ward": "KIRIKIRI",
+       "ward_code": "04-04",
+       "pu_count": 59
+      },
+      {
+       "ward": "AMUWO",
+       "ward_code": "04-05",
+       "pu_count": 109
+      },
+      {
+       "ward": "IJEGUN",
+       "ward_code": "04-06",
+       "pu_count": 44
+      },
+      {
+       "ward": "SATELLITE",
+       "ward_code": "04-07",
+       "pu_count": 80
+      },
+      {
+       "ward": "IREDE",
+       "ward_code": "04-08",
+       "pu_count": 14
+      },
+      {
+       "ward": "IBESHE",
+       "ward_code": "04-09",
+       "pu_count": 21
+      },
+      {
+       "ward": "IGBOLOGUN",
+       "ward_code": "04-10",
+       "pu_count": 28
+      },
+      {
+       "ward": "FESTAC III",
+       "ward_code": "04-11",
+       "pu_count": 56
+      }
+     ]
+    },
+    {
+     "lga": "BADAGRY",
+     "lga_code": "06",
+     "ward_count": 11,
+     "pu_count": 412,
+     "wards": [
+      {
+       "ward": "POSUKOH",
+       "ward_code": "06-01",
+       "pu_count": 43
+      },
+      {
+       "ward": "AWHANJIGOH",
+       "ward_code": "06-02",
+       "pu_count": 32
+      },
+      {
+       "ward": "IBEREKO",
+       "ward_code": "06-03",
+       "pu_count": 64
+      },
+      {
+       "ward": "APA",
+       "ward_code": "06-04",
+       "pu_count": 19
+      },
+      {
+       "ward": "KETA-EAST",
+       "ward_code": "06-05",
+       "pu_count": 45
+      },
+      {
+       "ward": "IWORO GBANKO",
+       "ward_code": "06-06",
+       "pu_count": 29
+      },
+      {
+       "ward": "AJIDO",
+       "ward_code": "06-07",
+       "pu_count": 15
+      },
+      {
+       "ward": "ILOGBO-ARAROMI",
+       "ward_code": "06-08",
+       "pu_count": 77
+      },
+      {
+       "ward": "IKOGA",
+       "ward_code": "06-09",
+       "pu_count": 32
+      },
+      {
+       "ward": "AJARA",
+       "ward_code": "06-10",
+       "pu_count": 45
+      },
+      {
+       "ward": "IYA-AFIN",
+       "ward_code": "06-11",
+       "pu_count": 11
+      }
+     ]
+    },
+    {
+     "lga": "OJO",
+     "lga_code": "17",
+     "ward_count": 11,
+     "pu_count": 582,
+     "wards": [
+      {
+       "ward": "OJO TOWN",
+       "ward_code": "17-01",
+       "pu_count": 93
+      },
+      {
+       "ward": "OKOKOMAIKO",
+       "ward_code": "17-02",
+       "pu_count": 34
+      },
+      {
+       "ward": "AJANGBADI",
+       "ward_code": "17-03",
+       "pu_count": 55
+      },
+      {
+       "ward": "IJANIKIN",
+       "ward_code": "17-04",
+       "pu_count": 43
+      },
+      {
+       "ward": "IBA",
+       "ward_code": "17-05",
+       "pu_count": 105
+      },
+      {
+       "ward": "ILOGBO",
+       "ward_code": "17-06",
+       "pu_count": 80
+      },
+      {
+       "ward": "IREWE",
+       "ward_code": "17-07",
+       "pu_count": 9
+      },
+      {
+       "ward": "TAFI",
+       "ward_code": "17-08",
+       "pu_count": 8
+      },
+      {
+       "ward": "ETEGBIN",
+       "ward_code": "17-09",
+       "pu_count": 22
+      },
+      {
+       "ward": "IDOLUWO",
+       "ward_code": "17-10",
+       "pu_count": 8
+      },
+      {
+       "ward": "SABO",
+       "ward_code": "17-11",
+       "pu_count": 125
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "senatorial_district": "LAGOS CENTRAL",
+   "lga_count": 5,
+   "ward_count": 62,
+   "pu_count": 2738,
+   "lgas": [
+    {
+     "lga": "APAPA",
+     "lga_code": "05",
+     "ward_count": 10,
+     "pu_count": 374,
+     "wards": [
+      {
+       "ward": "APAPA I (MARINE RD. & ENVIRONS)",
+       "ward_code": "05-01",
+       "pu_count": 39
+      },
+      {
+       "ward": "APAPA II (LIVERPOOL RD. AND ENVIRONS)",
+       "ward_code": "05-02",
+       "pu_count": 24
+      },
+      {
+       "ward": "APAPA III (CREEK RD. TINCAN/SNAKE ISLAND",
+       "ward_code": "05-03",
+       "pu_count": 25
+      },
+      {
+       "ward": "APAPA IV (PELEWURA CRESCENT AND ENVIRONS)",
+       "ward_code": "05-04",
+       "pu_count": 32
+      },
+      {
+       "ward": "IJORA-OLOYE",
+       "ward_code": "05-05",
+       "pu_count": 29
+      },
+      {
+       "ward": "OLODAN ST. OLOJOWOU ST/ALH.DOGO OLATOKUNBO ST. IGANMU",
+       "ward_code": "05-06",
+       "pu_count": 58
+      },
+      {
+       "ward": "GASKIYA & ENVIRONS",
+       "ward_code": "05-07",
+       "pu_count": 29
+      },
+      {
+       "ward": "AFOLABI ALASIA STR. AND ENVIRONS",
+       "ward_code": "05-08",
+       "pu_count": 57
+      },
+      {
+       "ward": "MALU ROAD AND ENVIRONS",
+       "ward_code": "05-09",
+       "pu_count": 33
+      },
+      {
+       "ward": "SARI AND ENVIRONS",
+       "ward_code": "05-10",
+       "pu_count": 48
+      }
+     ]
+    },
+    {
+     "lga": "ETI-OSA",
+     "lga_code": "08",
+     "ward_count": 10,
+     "pu_count": 725,
+     "wards": [
+      {
+       "ward": "VICTORIA ISLAND I",
+       "ward_code": "08-01",
+       "pu_count": 75
+      },
+      {
+       "ward": "VICTORIA ISLAND II",
+       "ward_code": "08-02",
+       "pu_count": 96
+      },
+      {
+       "ward": "ILASAN HOUSING EST.",
+       "ward_code": "08-03",
+       "pu_count": 59
+      },
+      {
+       "ward": "LEKKI/IKATE AND ENVIRONS",
+       "ward_code": "08-04",
+       "pu_count": 126
+      },
+      {
+       "ward": "ILADO/ETI-OSA AND ENVIRONS",
+       "ward_code": "08-05",
+       "pu_count": 73
+      },
+      {
+       "ward": "AJAH/SANGOTEDO",
+       "ward_code": "08-06",
+       "pu_count": 67
+      },
+      {
+       "ward": "ADO/LANGBASA/BADORE",
+       "ward_code": "08-07",
+       "pu_count": 53
+      },
+      {
+       "ward": "IKOYI I",
+       "ward_code": "08-08",
+       "pu_count": 46
+      },
+      {
+       "ward": "IKOYI II",
+       "ward_code": "08-09",
+       "pu_count": 67
+      },
+      {
+       "ward": "OBALENDE",
+       "ward_code": "08-10",
+       "pu_count": 63
+      }
+     ]
+    },
+    {
+     "lga": "LAGOS ISLAND",
+     "lga_code": "14",
+     "ward_count": 19,
+     "pu_count": 389,
+     "wards": [
+      {
+       "ward": "OLOWOGBOWO/ELEGBATA",
+       "ward_code": "14-01",
+       "pu_count": 23
+      },
+      {
+       "ward": "OLUWOLE",
+       "ward_code": "14-02",
+       "pu_count": 17
+      },
+      {
+       "ward": "IDUMOTA/OKE",
+       "ward_code": "14-03",
+       "pu_count": 26
+      },
+      {
+       "ward": "OJU-OTO",
+       "ward_code": "14-04",
+       "pu_count": 30
+      },
+      {
+       "ward": "OKO-AWO",
+       "ward_code": "14-05",
+       "pu_count": 19
+      },
+      {
+       "ward": "AGARAWU/OBADINA",
+       "ward_code": "14-06",
+       "pu_count": 15
+      },
+      {
+       "ward": "IDUNTAFA",
+       "ward_code": "14-07",
+       "pu_count": 24
+      },
+      {
+       "ward": "ILUPESI",
+       "ward_code": "14-08",
+       "pu_count": 23
+      },
+      {
+       "ward": "ISALE-AGBEDE",
+       "ward_code": "14-09",
+       "pu_count": 13
+      },
+      {
+       "ward": "OLOSUN",
+       "ward_code": "14-10",
+       "pu_count": 17
+      },
+      {
+       "ward": "OLUSHI/KAKAWA",
+       "ward_code": "14-11",
+       "pu_count": 14
+      },
+      {
+       "ward": "POPO-AGUDA",
+       "ward_code": "14-12",
+       "pu_count": 8
+      },
+      {
+       "ward": "ANIKANTAMO",
+       "ward_code": "14-13",
+       "pu_count": 14
+      },
+      {
+       "ward": "OKO-FAJI",
+       "ward_code": "14-14",
+       "pu_count": 19
+      },
+      {
+       "ward": "EIYEKOLE",
+       "ward_code": "14-15",
+       "pu_count": 29
+      },
+      {
+       "ward": "ONIKAN",
+       "ward_code": "14-16",
+       "pu_count": 14
+      },
+      {
+       "ward": "SANDGROUSE",
+       "ward_code": "14-17",
+       "pu_count": 19
+      },
+      {
+       "ward": "EPETEDO",
+       "ward_code": "14-18",
+       "pu_count": 29
+      },
+      {
+       "ward": "LAFIAJI/EBUTE",
+       "ward_code": "14-19",
+       "pu_count": 36
+      }
+     ]
+    },
+    {
+     "lga": "LAGOS MAINLAND",
+     "lga_code": "15",
+     "ward_count": 11,
+     "pu_count": 493,
+     "wards": [
+      {
+       "ward": "OTTO/IDDO",
+       "ward_code": "15-01",
+       "pu_count": 15
+      },
+      {
+       "ward": "EPETEDO",
+       "ward_code": "15-02",
+       "pu_count": 72
+      },
+      {
+       "ward": "OLALEYE VILLAGE",
+       "ward_code": "15-03",
+       "pu_count": 31
+      },
+      {
+       "ward": "MAROKO/EBUTE METTA",
+       "ward_code": "15-04",
+       "pu_count": 71
+      },
+      {
+       "ward": "OYINGBO MARKET/EBUTE METTA",
+       "ward_code": "15-05",
+       "pu_count": 48
+      },
+      {
+       "ward": "GLOVER/EBUTE METTA",
+       "ward_code": "15-06",
+       "pu_count": 23
+      },
+      {
+       "ward": "OKO-BABA",
+       "ward_code": "15-07",
+       "pu_count": 31
+      },
+      {
+       "ward": "OYADIRAN ESTATE/ABULE-OJA",
+       "ward_code": "15-08",
+       "pu_count": 56
+      },
+      {
+       "ward": "ALAGOMEJI",
+       "ward_code": "15-09",
+       "pu_count": 40
+      },
+      {
+       "ward": "IWAYA",
+       "ward_code": "15-10",
+       "pu_count": 59
+      },
+      {
+       "ward": "YABA/IGBOBI",
+       "ward_code": "15-11",
+       "pu_count": 47
+      }
+     ]
+    },
+    {
+     "lga": "SURULERE",
+     "lga_code": "20",
+     "ward_count": 12,
+     "pu_count": 757,
+     "wards": [
+      {
+       "ward": "ORILE",
+       "ward_code": "20-01",
+       "pu_count": 84
+      },
+      {
+       "ward": "AGUDA",
+       "ward_code": "20-02",
+       "pu_count": 116
+      },
+      {
+       "ward": "IJESHATEDO",
+       "ward_code": "20-03",
+       "pu_count": 86
+      },
+      {
+       "ward": "AKINHANMI/COLE",
+       "ward_code": "20-04",
+       "pu_count": 52
+      },
+      {
+       "ward": "YABA/OJUELEGBA",
+       "ward_code": "20-05",
+       "pu_count": 37
+      },
+      {
+       "ward": "IGBAJA/STADIUM",
+       "ward_code": "20-06",
+       "pu_count": 43
+      },
+      {
+       "ward": "SHITTA/OGUNLANA DRIVE",
+       "ward_code": "20-07",
+       "pu_count": 57
+      },
+      {
+       "ward": "ADENIRAN/OGUNSANYA",
+       "ward_code": "20-08",
+       "pu_count": 38
+      },
+      {
+       "ward": "IPONRI HOUSING ESTATE/ERIC MOORE",
+       "ward_code": "20-09",
+       "pu_count": 31
+      },
+      {
+       "ward": "COKER",
+       "ward_code": "20-10",
+       "pu_count": 35
+      },
+      {
+       "ward": "ITIRE",
+       "ward_code": "20-11",
+       "pu_count": 94
+      },
+      {
+       "ward": "IKATE",
+       "ward_code": "20-12",
+       "pu_count": 84
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "senatorial_district": "LAGOS EAST",
+   "lga_count": 5,
+   "ward_count": 71,
+   "pu_count": 2798,
+   "lgas": [
+    {
+     "lga": "EPE",
+     "lga_code": "07",
+     "ward_count": 19,
+     "pu_count": 374,
+     "wards": [
+      {
+       "ward": "ETITA/EBODE",
+       "ward_code": "07-01",
+       "pu_count": 16
+      },
+      {
+       "ward": "LAGBADE",
+       "ward_code": "07-02",
+       "pu_count": 22
+      },
+      {
+       "ward": "POPO-OBA",
+       "ward_code": "07-03",
+       "pu_count": 10
+      },
+      {
+       "ward": "OKE-BALOGUN",
+       "ward_code": "07-04",
+       "pu_count": 19
+      },
+      {
+       "ward": "AJAGANABE",
+       "ward_code": "07-05",
+       "pu_count": 60
+      },
+      {
+       "ward": "ISE/IGBOGUN",
+       "ward_code": "07-06",
+       "pu_count": 21
+      },
+      {
+       "ward": "ORIBA/LADABA",
+       "ward_code": "07-07",
+       "pu_count": 25
+      },
+      {
+       "ward": "ABOMITI",
+       "ward_code": "07-08",
+       "pu_count": 40
+      },
+      {
+       "ward": "AGBOWA",
+       "ward_code": "07-09",
+       "pu_count": 12
+      },
+      {
+       "ward": "AGBOWA IKOSI",
+       "ward_code": "07-10",
+       "pu_count": 11
+      },
+      {
+       "ward": "AGO OWU",
+       "ward_code": "07-11",
+       "pu_count": 12
+      },
+      {
+       "ward": "ORUGBO",
+       "ward_code": "07-12",
+       "pu_count": 5
+      },
+      {
+       "ward": "ILARA",
+       "ward_code": "07-13",
+       "pu_count": 22
+      },
+      {
+       "ward": "IBONWON",
+       "ward_code": "07-14",
+       "pu_count": 15
+      },
+      {
+       "ward": "ODORAGUNSIN",
+       "ward_code": "07-15",
+       "pu_count": 16
+      },
+      {
+       "ward": "POKA",
+       "ward_code": "07-16",
+       "pu_count": 21
+      },
+      {
+       "ward": "ODOMOLA",
+       "ward_code": "07-17",
+       "pu_count": 24
+      },
+      {
+       "ward": "EJIRIN",
+       "ward_code": "07-18",
+       "pu_count": 8
+      },
+      {
+       "ward": "ITOIKIN",
+       "ward_code": "07-19",
+       "pu_count": 15
+      }
+     ]
+    },
+    {
+     "lga": "IBEJU/LEKKI",
+     "lga_code": "09",
+     "ward_count": 11,
+     "pu_count": 227,
+     "wards": [
+      {
+       "ward": "IBEJU I",
+       "ward_code": "09-01",
+       "pu_count": 20
+      },
+      {
+       "ward": "IBEJU II",
+       "ward_code": "09-02",
+       "pu_count": 19
+      },
+      {
+       "ward": "ORIMEDU I",
+       "ward_code": "09-03",
+       "pu_count": 21
+      },
+      {
+       "ward": "ORIMEDU II",
+       "ward_code": "09-04",
+       "pu_count": 16
+      },
+      {
+       "ward": "ORIMEDU III",
+       "ward_code": "09-05",
+       "pu_count": 15
+      },
+      {
+       "ward": "IWEREKUN I",
+       "ward_code": "09-06",
+       "pu_count": 56
+      },
+      {
+       "ward": "IWEREKUN II",
+       "ward_code": "09-07",
+       "pu_count": 31
+      },
+      {
+       "ward": "LEKKI I",
+       "ward_code": "09-08",
+       "pu_count": 12
+      },
+      {
+       "ward": "LEKKI II",
+       "ward_code": "09-09",
+       "pu_count": 13
+      },
+      {
+       "ward": "SIRIWON/IGBEKODO I",
+       "ward_code": "09-10",
+       "pu_count": 13
+      },
+      {
+       "ward": "SIRIWON/IGBEKODO II",
+       "ward_code": "09-11",
+       "pu_count": 11
+      }
+     ]
+    },
+    {
+     "lga": "IKORODU",
+     "lga_code": "12",
+     "ward_count": 19,
+     "pu_count": 682,
+     "wards": [
+      {
+       "ward": "ISELE I",
+       "ward_code": "12-01",
+       "pu_count": 96
+      },
+      {
+       "ward": "ISELE II",
+       "ward_code": "12-02",
+       "pu_count": 23
+      },
+      {
+       "ward": "ISELE III",
+       "ward_code": "12-03",
+       "pu_count": 23
+      },
+      {
+       "ward": "AGA/IJIMU",
+       "ward_code": "12-04",
+       "pu_count": 56
+      },
+      {
+       "ward": "IPAKODO",
+       "ward_code": "12-05",
+       "pu_count": 79
+      },
+      {
+       "ward": "IMOTA 1",
+       "ward_code": "12-06",
+       "pu_count": 15
+      },
+      {
+       "ward": "IMOTA II",
+       "ward_code": "12-07",
+       "pu_count": 28
+      },
+      {
+       "ward": "ISIU",
+       "ward_code": "12-08",
+       "pu_count": 12
+      },
+      {
+       "ward": "IGBOGBO I",
+       "ward_code": "12-09",
+       "pu_count": 30
+      },
+      {
+       "ward": "IGBOGBO II",
+       "ward_code": "12-10",
+       "pu_count": 45
+      },
+      {
+       "ward": "BAIYEKU/ORETA",
+       "ward_code": "12-11",
+       "pu_count": 29
+      },
+      {
+       "ward": "IBESHE",
+       "ward_code": "12-12",
+       "pu_count": 29
+      },
+      {
+       "ward": "IJEDE J",
+       "ward_code": "12-13",
+       "pu_count": 21
+      },
+      {
+       "ward": "IJEDE II",
+       "ward_code": "12-14",
+       "pu_count": 27
+      },
+      {
+       "ward": "AGURA/IPONMI",
+       "ward_code": "12-15",
+       "pu_count": 34
+      },
+      {
+       "ward": "ODOGUNYAN",
+       "ward_code": "12-16",
+       "pu_count": 65
+      },
+      {
+       "ward": "ERIKORODU",
+       "ward_code": "12-17",
+       "pu_count": 19
+      },
+      {
+       "ward": "AGBALA",
+       "ward_code": "12-18",
+       "pu_count": 43
+      },
+      {
+       "ward": "OLORUNDA/IGBAGA",
+       "ward_code": "12-19",
+       "pu_count": 8
+      }
+     ]
+    },
+    {
+     "lga": "KOSOFE",
+     "lga_code": "13",
+     "ward_count": 10,
+     "pu_count": 899,
+     "wards": [
+      {
+       "ward": "OWORONSHOKI",
+       "ward_code": "13-01",
+       "pu_count": 89
+      },
+      {
+       "ward": "IFAKO/SOLUYI",
+       "ward_code": "13-02",
+       "pu_count": 79
+      },
+      {
+       "ward": "ANTHONY/AJAO ESTATE/MENDE/MARYLAND",
+       "ward_code": "13-03",
+       "pu_count": 51
+      },
+      {
+       "ward": "OJOTA/OGUDU",
+       "ward_code": "13-04",
+       "pu_count": 115
+      },
+      {
+       "ward": "KETU/ALAPERE/AGIDI/ORISIGUN/KOSOFE/AJELOGO/AKANIMODO",
+       "ward_code": "13-05",
+       "pu_count": 179
+      },
+      {
+       "ward": "IKOSI KETU/MILE 12/AGILITI/MAIDAN",
+       "ward_code": "13-06",
+       "pu_count": 192
+      },
+      {
+       "ward": "ISHERI-OLOWO-IRA/SHANGISHA/MAGODO PHASE I & II",
+       "ward_code": "13-07",
+       "pu_count": 124
+      },
+      {
+       "ward": "AGBOYI I",
+       "ward_code": "13-08",
+       "pu_count": 6
+      },
+      {
+       "ward": "AGBOYI II",
+       "ward_code": "13-09",
+       "pu_count": 5
+      },
+      {
+       "ward": "OWODE ONIRIN/AJEGUNLE/ODO-OGUN",
+       "ward_code": "13-10",
+       "pu_count": 59
+      }
+     ]
+    },
+    {
+     "lga": "SOMOLU",
+     "lga_code": "19",
+     "ward_count": 12,
+     "pu_count": 616,
+     "wards": [
+      {
+       "ward": "ONIPANU",
+       "ward_code": "19-01",
+       "pu_count": 38
+      },
+      {
+       "ward": "PALMGROVE/IJEBUTEDO",
+       "ward_code": "19-02",
+       "pu_count": 40
+      },
+      {
+       "ward": "ALADE",
+       "ward_code": "19-03",
+       "pu_count": 33
+      },
+      {
+       "ward": "BAJULAIYE",
+       "ward_code": "19-04",
+       "pu_count": 37
+      },
+      {
+       "ward": "MAFOWOKU/PEDRO",
+       "ward_code": "19-05",
+       "pu_count": 41
+      },
+      {
+       "ward": "LAD-LAK/BARIGA",
+       "ward_code": "19-06",
+       "pu_count": 92
+      },
+      {
+       "ward": "ILAJE/AKOKA",
+       "ward_code": "19-07",
+       "pu_count": 57
+      },
+      {
+       "ward": "IGBOBI/FADEYI",
+       "ward_code": "19-08",
+       "pu_count": 31
+      },
+      {
+       "ward": "FOLA AGORO/BAJULAIYE/IGBARI-AKOKA",
+       "ward_code": "19-09",
+       "pu_count": 50
+      },
+      {
+       "ward": "GBAGADA PHASE I OBANIKORO/PEDRO",
+       "ward_code": "19-10",
+       "pu_count": 50
+      },
+      {
+       "ward": "GBAGADA PHASE II /BARIGA/APELEHIN",
+       "ward_code": "19-11",
+       "pu_count": 59
+      },
+      {
+       "ward": "ABULE-OKUTA/ILAJE/BARIGA",
+       "ward_code": "19-12",
+       "pu_count": 88
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

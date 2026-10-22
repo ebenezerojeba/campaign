@@ -19,8 +19,9 @@ let User;
 let Volunteer;
 
 const valid = {
-  firstName: 'Ngozi', lastName: 'Okafor', email: 'ngozi@example.com', phone: '0803 123 4567', contactMethod: 'email',
-  state: 'Lagos', lga: 'Surulere', lcda: 'Itire-Ikate', ward: '', community: 'Aguda',
+  firstName: 'Ngozi', lastName: 'Okafor', email: 'ngozi@example.com', phone: '0803 123 4567', contactMethod: 'email', agentType: 'agent_1',
+  stateOfOrigin: 'Anambra', lgaOfOrigin: 'Onitsha North',
+  state: 'Lagos', lga: 'Surulere', lcda: 'Itire-Ikate', wardCode: '20-01', pollingUnitCode: '24-20-01-001', ward: 'Typed by the browser', community: 'Aguda',
   interests: ['community_outreach', 'civic_education'], skills: ['writing'], availability: ['saturdays'], participationFormat: 'either',
   motivation: 'I want to help my neighbours.', ageConfirmed: true, consentProcessing: true, consentCommunications: true,
 };
@@ -68,6 +69,61 @@ describe('public registration', () => {
     assert.equal(saved.consent.processing, true);
     assert.equal(saved.isSample, false);
     assert.equal(saved.notifications[0].status, 'skipped');
+    assert.equal(saved.agentType, 'agent_1');
+    assert.equal(saved.stateOfOrigin, 'Anambra');
+    assert.equal(saved.lgaOfOrigin, 'Onitsha North');
+    // Names come from the official data, never from the browser.
+    assert.equal(saved.ward, 'ORILE');
+    assert.equal(saved.wardCode, '20-01');
+    assert.equal(saved.pollingUnit, 'JUNCTION OF ABBI AVENUE/TAPA BELLO ST. I');
+    assert.equal(saved.pollingUnitCode, '24-20-01-001');
+    assert.equal(saved.senatorialDistrict, 'LAGOS CENTRAL');
+  });
+
+  test('requires an agent type and never assigns one', async () => {
+    const res = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091116666', email: '', contactMethod: 'sms', agentType: '' });
+    assert.equal(res.status, 422);
+    assert.ok(res.body.error.details.fields.agentType);
+    const { agentType, ...withoutAgent } = valid;
+    const missing = await request(app).post('/api/volunteers/register').send({ ...withoutAgent, phone: '08091116666', email: '', contactMethod: 'sms' });
+    assert.equal(missing.status, 422);
+    const bogus = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091116666', email: '', contactMethod: 'sms', agentType: 'agent_3' });
+    assert.equal(bogus.status, 422);
+  });
+
+  test('rejects an LGA of origin from a different state', async () => {
+    const res = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091117777', email: '', contactMethod: 'sms', stateOfOrigin: 'Kano', lgaOfOrigin: 'Onitsha North' });
+    assert.equal(res.status, 422);
+    assert.ok(res.body.error.details.fields.lgaOfOrigin);
+  });
+
+  test('rejects a ward from another LGA and a polling unit from another ward', async () => {
+    const wrongWard = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091118888', email: '', contactMethod: 'sms', wardCode: '11-01', pollingUnitCode: '24-11-01-001' });
+    assert.equal(wrongWard.status, 422);
+    assert.ok(wrongWard.body.error.details.fields.wardCode);
+    const wrongUnit = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091118888', email: '', contactMethod: 'sms', pollingUnitCode: '24-20-02-001' });
+    assert.equal(wrongUnit.status, 422);
+    assert.ok(wrongUnit.body.error.details.fields.pollingUnitCode);
+  });
+
+  test('requires ward and polling unit where official data exists, whatever the browser sends', async () => {
+    const res = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091119999', email: '', contactMethod: 'sms', wardCode: '', pollingUnitCode: '', electoralRequired: false });
+    assert.equal(res.status, 422);
+    const { fields } = res.body.error.details;
+    assert.ok(fields.wardCode && fields.pollingUnitCode);
+  });
+
+  test('serves official wards and polling units, and reports unconfigured areas', async () => {
+    const wards = await request(app).get('/api/locations/wards?state=Lagos&lga=Surulere');
+    assert.equal(wards.status, 200);
+    assert.equal(wards.body.data.configured, true);
+    assert.equal(wards.body.data.wards.length, 12);
+    const units = await request(app).get('/api/locations/polling-units?state=Lagos&lga=Surulere&ward=20-01');
+    assert.equal(units.status, 200);
+    assert.equal(units.body.data.length, 84);
+    const none = await request(app).get('/api/locations/wards?state=Ogun&lga=Abeokuta%20North');
+    assert.deepEqual(none.body.data, { configured: false, required: false, wards: [] });
+    assert.equal((await request(app).get('/api/locations/polling-units?state=Lagos&lga=Surulere&ward=11-01')).status, 404);
   });
 
   test('rejects a duplicate phone number with a clear code', async () => {
@@ -171,6 +227,21 @@ describe('admin access control', () => {
     const admin = await signIn('admin@test.org');
     const res = await admin.get('/api/admin/volunteers?status=bogus');
     assert.equal(res.status, 422);
+    assert.equal((await admin.get('/api/admin/volunteers?agentType=agent_9')).status, 422);
+  });
+
+  test('admin can filter and search by agent type, origin, ward and polling unit', async () => {
+    const admin = await signIn('admin@test.org');
+    const count = async (qs) => (await admin.get(`/api/admin/volunteers?${qs}`)).body.meta.total;
+    assert.equal(await count('agentType=agent_1'), 1);
+    assert.equal(await count('agentType=agent_2'), 0);
+    assert.equal(await count('stateOfOrigin=Anambra&lgaOfOrigin=Onitsha%20North'), 1);
+    assert.equal(await count('lga=Surulere&wardCode=20-01&pollingUnitCode=24-20-01-001'), 1);
+    assert.equal(await count('senatorialDistrict=LAGOS%20CENTRAL'), 1);
+    assert.equal(await count('q=24-20-01-001'), 1);
+    const list = await admin.get('/api/admin/volunteers?agentType=agent_1');
+    assert.equal(list.body.data[0].agentType, 'agent_1');
+    assert.equal(list.body.data[0].ward, 'ORILE');
   });
 
   test('reviewers cannot export, manage opportunities or staff', async () => {
@@ -187,6 +258,10 @@ describe('admin access control', () => {
     const res = await admin.get('/api/admin/exports/volunteers');
     assert.equal(res.status, 200);
     assert.match(res.text, /"'=HYPERLINK\(""http:\/\/evil""\)"/);
+    const [header, row] = res.text.replace(/^\uFEFF/, '').split('\r\n');
+    for (const col of ['Agent type', 'State of origin', 'LGA of origin', 'Ward', 'Polling unit', 'Polling unit code']) assert.ok(header.split(',').includes(col), col);
+    assert.match(row, /Agent 1/);
+    assert.match(row, /24-20-01-001/);
   });
 
   test('signing out revokes the session token', async () => {
@@ -217,5 +292,22 @@ describe('opportunities', () => {
     const admin = await signIn('admin@test.org');
     const res = await admin.post('/api/admin/opportunities').set(fetchHeader).send({ title: 'Event', summary: 'An event to support.', category: 'event_support', startDate: '2026-12-10', endDate: '2026-12-01' });
     assert.equal(res.status, 422);
+  });
+});
+
+describe('agent type 2 registration', () => {
+  test('saves Agent 2 and shows it to staff', async () => {
+    const res = await request(app).post('/api/volunteers/register').send({
+      ...valid, firstName: 'Tunde', phone: '08097770000', email: 'tunde@example.com', agentType: 'agent_2',
+      stateOfOrigin: 'FCT', lgaOfOrigin: 'Gwagwalada', lga: 'Ikeja', lcda: '', wardCode: '11-01', pollingUnitCode: '24-11-01-001',
+    });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    const admin = await signIn('admin@test.org');
+    const list = await admin.get('/api/admin/volunteers?agentType=agent_2');
+    assert.equal(list.body.meta.total, 1);
+    const detail = await admin.get(`/api/admin/volunteers/${list.body.data[0]._id}`);
+    assert.equal(detail.body.data.agentType, 'agent_2');
+    assert.equal(detail.body.data.pollingUnit, 'ANIFOWOSHE PRY. SCH.');
+    assert.equal(detail.body.data.senatorialDistrict, 'LAGOS WEST I');
   });
 });

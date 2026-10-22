@@ -1,0 +1,32 @@
+{
+  "description": "Electoral datasets used by the registration form. One entry per state. The polling-unit file is a JSON array of { code, senatorial_district, lga, lga_code, ward, ward_code, polling_unit, pu_number }. lgaNames maps each INEC LGA code in the file to the LGA name the app uses (shared/lagos.js).",
+  "datasets": [
+    {
+      "state": "Lagos",
+      "stateCode": "24",
+      "pollingUnitsFile": "lagos_polling_units.json",
+      "lgaNames": {
+        "01": "Agege",
+        "02": "Ajeromi-Ifelodun",
+        "03": "Alimosho",
+        "04": "Amuwo-Odofin",
+        "05": "Apapa",
+        "06": "Badagry",
+        "07": "Epe",
+        "08": "Eti-Osa",
+        "09": "Ibeju-Lekki",
+        "10": "Ifako-Ijaiye",
+        "11": "Ikeja",
+        "12": "Ikorodu",
+        "13": "Kosofe",
+        "14": "Lagos Island",
+        "15": "Lagos Mainland",
+        "16": "Mushin",
+        "17": "Ojo",
+        "18": "Oshodi-Isolo",
+        "19": "Shomolu",
+        "20": "Surulere"
+      }
+    }
+  ]
+}
