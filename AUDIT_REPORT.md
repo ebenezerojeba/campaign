@@ -262,3 +262,62 @@ Hostinger has not been switched on. Production keeps the working Gmail settings 
 4. **Official formats:** provide the official VIN and APC registration number formats.
 5. **Privacy notice:** approve the privacy notice wording, especially the stated purpose for bank details (paying allowances).
 6. **Earlier registrations:** contact the 2 earlier registrants for their identity and bank details, if needed.
+
+## 17. Email delivery investigation (23 October 2026, 05:00 UTC)
+
+**Reported problem:** the site says emails were sent, but recipients do not receive them.
+
+### Root cause
+
+1. **Production does not send from `notifications@apclagos.org`.** Hostinger rejects the supplied credentials for that mailbox, so production still uses the Gmail SMTP account, and messages come from that Gmail address. Evidence:
+   - `smtp.hostinger.com` completes the TLS 1.3 handshake with a valid `hostinger.com` certificate.
+   - `transporter.verify()` then fails with `535 5.7.8 authentication failed` on port 465 (SSL) and on port 587 (STARTTLS).
+   - The production `SMTP_*` variables are still the Gmail values.
+2. **Admin alerts are self-sends.** They go from `ayindegeorge20@gmail.com` to `ayindegeorge20@gmail.com`. Gmail files messages an account sends to itself under **Sent / All Mail**, not the Inbox, so the alerts look as if they never arrived.
+3. **"Sent" was presented as delivery.** The latest registration (`LAG-36GH-EF2E`, 04:57 UTC) recorded the confirmation, admin alert and decision emails as accepted by Gmail's SMTP server, with `@gmail.com` message IDs. Acceptance is not inbox delivery. The applicant's success page and the admin page used wording that implied delivery.
+4. The two earlier registrations failed under Resend before the migration. Those emails were never sent.
+
+### Flow traced
+
+1. The form posts to `POST /api/agents/register`.
+2. The record is saved first.
+3. `sendRegistrationEmails()` then awaits `transporter.sendMail()` for the applicant confirmation and the admin alert.
+4. Each outcome is stored on the registration.
+5. The API returns `confirmationEmail`.
+
+The success page shows the green notice only when the status is `sent`, which means SMTP accepted the message. On any other outcome it tells the applicant the email was not sent. Decision emails follow the same path. There is no contact form or password-reset email in this project.
+
+### Fixes
+
+- **`server/src/services/email.js`:** each attempt now gets:
+  - a correlation ID, also sent as the `X-Correlation-ID` header;
+  - a workflow name;
+  - accepted and rejected recipient counts;
+  - the SMTP reply (with addresses removed) and the SMTP error code;
+  - one structured `[email]` log line containing only the recipient's domain, never addresses, credentials or registration data.
+- **Delivery outcomes:** a message counts as accepted only when SMTP accepted at least one recipient and rejected none. `emailConfigNotices()` flags self-addressed admin alerts and Gmail From rewriting.
+- **`server/src/models/Agent.js`:** delivery records store `correlationId`, `smtpResponse`, `smtpCode`, `accepted` and `rejected`.
+- **`server/scripts/check-email.js`:** prints those notices, and states that a successful login does not prove delivery.
+- **Wording:** the applicant now sees "Confirmation email on its way", with a note that the mail server accepted it and a reminder to check spam (`client/src/components/RegistrationSuccess.jsx`). Staff see "accepted by mail server" with the correlation ID and SMTP reply (`client/src/admin/pages/AgentDetail.jsx`).
+- **`server/test/email.test.js`:** tests added for correlation IDs and counts, refused recipients counting as failures, authentication-failure logging without secrets, and the self-send warning.
+
+### Results
+
+| Check | Result |
+|---|---|
+| Hostinger TLS handshake, port 465 | Passed (TLS 1.3) |
+| Hostinger `verify()`, ports 465 and 587 | **Failed: 535 authentication failed** |
+| Hostinger mailbox existence | Not determinable from here (outbound port 25 is blocked on this network); check in hPanel |
+| Gmail `verify()` with production-equivalent settings | Passed |
+| Earlier one-off test message to the notification mailbox | Accepted by Gmail. As a self-send it appears under Sent / All Mail. Inbox receipt **not confirmed**. |
+| SPF / DKIM / DMARC for apclagos.org | SPF includes Hostinger; DKIM `hostingermail-a/b/c` CNAMEs present; DMARC `p=none` |
+| `npm test` | 48 of 48 passed |
+| `npm run build` | Passed |
+| Live registration email to a test inbox | Not run: it would put fabricated identity and bank data into production. Test it once Hostinger works, with a real test registration you approve, then delete it. |
+
+### Remaining actions
+
+1. **Hostinger mailbox:** in hPanel, open **Emails**, then **Email accounts**. Confirm `notifications@apclagos.org` exists and is active, and reset its password. With the new password, production can be switched to Hostinger (`SMTP_HOST=smtp.hostinger.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER` and `EMAIL_FROM=notifications@apclagos.org`, `EMAIL_FROM_NAME=APC Lagos`). This also ends the admin self-send.
+2. **Check Gmail now:** look in **Sent** and **All Mail** of `ayindegeorge20@gmail.com` for the admin alerts and for the test message "APC Lagos registration email test (Nodemailer)". Ask the applicant of `LAG-36GH-EF2E` to check spam.
+3. **Hostinger delivery logs:** after switching, use the logs in hPanel to confirm delivery or bounces for any message, by time and recipient domain. Every attempt has a matching correlation ID on the admin page and in the Vercel function logs.
+4. **Admin password:** the exposed admin password is **still active**. The owner chose to deploy anyway. Change it (section 16).

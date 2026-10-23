@@ -29,8 +29,14 @@ const notificationSchema = new Schema(
   {
     type: { type: String, enum: ['registration_confirmation', 'decision', 'admin_alert'] },
     channel: { type: String, default: 'email' },
+    // 'sent' means the SMTP server accepted the message, not that it was delivered.
     status: { type: String, enum: ['sent', 'failed', 'skipped'] },
-    providerId: String,
+    providerId: String, // SMTP Message-ID
+    correlationId: String, // matches the [email] server log line and X-Correlation-ID header
+    smtpResponse: String,
+    smtpCode: Number,
+    accepted: Number,
+    rejected: Number,
     error: String,
     at: { type: Date, default: Date.now },
   },

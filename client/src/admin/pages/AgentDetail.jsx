@@ -323,13 +323,13 @@ export default function AgentDetail() {
               ))}
             </ol>
           </Card>
-          <Card title="Messages sent">
+          <Card title="Emails" description="“Accepted” means our mail server took the message; it does not confirm inbox delivery.">
             {a.notifications.length === 0 ? <p className="text-sm text-slate-500">No messages recorded.</p> : (
               <ul className="space-y-2.5">
                 {[...a.notifications].reverse().map((n, i) => (
                   <li key={i} className="flex items-start justify-between gap-3 text-sm">
-                    <span><span className="flex items-center gap-1.5 font-medium text-ink"><Send className="size-3.5 text-slate-400" aria-hidden />{n.type.replace(/_/g, ' ')}</span><span className="text-slate-500">{formatDateTime(n.at)}{n.error ? ` · ${n.error}` : ''}</span></span>
-                    <Badge tone={n.status === 'sent' ? 'approved' : n.status === 'failed' ? 'rejected' : 'neutral'}>{n.status}</Badge>
+                    <span><span className="flex items-center gap-1.5 font-medium text-ink"><Send className="size-3.5 text-slate-400" aria-hidden />{n.type.replace(/_/g, ' ')}</span><span className="text-slate-500">{formatDateTime(n.at)}{n.error ? ` · ${n.error}` : ''}{n.smtpResponse ? ` · ${n.smtpResponse}` : ''}</span>{n.correlationId && <span className="block font-mono text-xs text-slate-400">ID {n.correlationId}</span>}</span>
+                    <Badge tone={n.status === 'sent' ? 'approved' : n.status === 'failed' ? 'rejected' : 'neutral'}>{n.status === 'sent' ? 'accepted by mail server' : n.status}</Badge>
                   </li>
                 ))}
               </ul>

@@ -1,6 +1,7 @@
 // Outgoing email over SMTP with Nodemailer. Every send resolves to a delivery
 // record that callers store; an email failure never fails the request that
 // triggered it, and the applicant is told when their confirmation did not go.
+import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
 import * as templates from './emailTemplates.js';
@@ -76,17 +77,39 @@ function describeFailure(err) {
   }
 }
 
-// Sends one message. Resolves to { status: 'sent' | 'failed' | 'skipped', providerId?, error? }.
-export async function sendEmail({ to, subject, html, text }) {
-  if (!to) return { status: 'skipped', error: 'No recipient address' };
-  if (!isSafeAddress(to)) return { status: 'skipped', error: 'Recipient address is not valid' };
+// One structured line per attempt for the server logs: workflow, outcome,
+// SMTP codes and counts. Never addresses, credentials or registration data;
+// only the recipient's domain, to spot provider-specific problems.
+function logAttempt(entry) {
+  console.info(`[email] ${JSON.stringify(entry)}`);
+}
+
+const domainOf = (address) => String(address).split('@')[1]?.toLowerCase() ?? '';
+// The SMTP server's reply, e.g. "250 2.0.0 OK", trimmed and with addresses removed.
+const safeResponse = (text) => (text ? String(text).replace(/\S+@\S+/g, '[address]').slice(0, 120) : undefined);
+
+// Sends one message and waits for the SMTP server's answer. Resolves to a
+// delivery record:
+//   status 'sent'    the SMTP server ACCEPTED the message for delivery. This is
+//                    not proof that it reached the inbox: the receiving
+//                    provider can still bounce, quarantine or spam-file it.
+//   status 'failed'  the SMTP server refused it, or could not be reached.
+//   status 'skipped' email is not configured, or the address is unusable.
+// Every record carries a correlation ID that matches the server log line.
+export async function sendEmail({ to, subject, html, text, workflow = 'email' }) {
+  const correlationId = crypto.randomUUID();
+  const base = { correlationId };
+  if (!to) return { ...base, status: 'skipped', error: 'No recipient address' };
+  if (!isSafeAddress(to)) return { ...base, status: 'skipped', error: 'Recipient address is not valid' };
   const problems = emailConfigProblems();
   if (problems.length) {
     if (!warned) { console.warn(`[email] not sending: ${problems.join('; ')}`); warned = true; }
     if (!env.isProd && env.NODE_ENV !== 'test') console.info(`[email:console] ${oneLine(subject)}\n${text}\n`);
-    return { status: 'skipped', error: 'Email is not configured on the server' };
+    logAttempt({ correlationId, workflow, outcome: 'skipped', reason: 'not_configured' });
+    return { ...base, status: 'skipped', error: 'Email is not configured on the server' };
   }
   const { address, name } = senderFrom(env.smtp);
+  const startedAt = Date.now();
   try {
     const info = await getTransporter().sendMail({
       from: { name, address },
@@ -95,13 +118,32 @@ export async function sendEmail({ to, subject, html, text }) {
       subject: oneLine(subject),
       html,
       text,
+      headers: { 'X-Correlation-ID': correlationId },
     });
-    if (info.rejected?.length) return { status: 'failed', error: 'The SMTP server refused the recipient address.' };
-    return { status: 'sent', providerId: info.messageId };
+    const accepted = info.accepted?.length ?? 0;
+    const rejected = info.rejected?.length ?? 0;
+    const smtpResponse = safeResponse(info.response);
+    const ok = accepted > 0 && rejected === 0;
+    logAttempt({ correlationId, workflow, outcome: ok ? 'accepted' : 'rejected', recipientDomain: domainOf(to), accepted, rejected, smtpResponse, messageId: info.messageId, ms: Date.now() - startedAt });
+    if (!ok) return { ...base, status: 'failed', error: 'The SMTP server refused the recipient address.', accepted, rejected, smtpResponse };
+    return { ...base, status: 'sent', providerId: info.messageId, accepted, rejected, smtpResponse };
   } catch (err) {
-    console.warn('[email] send failed:', err?.code ?? 'unknown', err?.responseCode ?? '');
-    return { status: 'failed', error: describeFailure(err) };
+    logAttempt({ correlationId, workflow, outcome: 'failed', recipientDomain: domainOf(to), code: err?.code ?? 'unknown', responseCode: err?.responseCode, ms: Date.now() - startedAt });
+    return { ...base, status: 'failed', error: describeFailure(err), smtpCode: err?.responseCode };
   }
+}
+
+// Notes on settings that work but often cause "sent but not received".
+export function emailConfigNotices(config = env.smtp) {
+  const notices = [];
+  const { address } = senderFrom(config);
+  if (config.adminTo && config.adminTo.toLowerCase() === address.toLowerCase()) {
+    notices.push('ADMIN_NOTIFICATION_EMAIL is the sending address itself. Gmail files messages you send to yourself under Sent, not the Inbox, so admin alerts can look missing. Use a different notification address.');
+  }
+  if (/@gmail\.com$/i.test(config.user) && address.toLowerCase() !== config.user.toLowerCase()) {
+    notices.push('Gmail rewrites the From address to the Gmail account unless EMAIL_FROM is a verified "Send mail as" alias.');
+  }
+  return notices;
 }
 
 // Checks the SMTP login without sending anything (used by `npm run email:check`).
@@ -119,13 +161,13 @@ export async function verifyEmailConnection() {
 const record = (type, outcome) => ({ type, channel: 'email', at: new Date(), ...outcome });
 
 export async function sendRegistrationEmails(agent) {
-  const jobs = [sendEmail({ to: agent.email, ...templates.registrationConfirmation(agent) }).then((o) => record('registration_confirmation', o))];
+  const jobs = [sendEmail({ to: agent.email, workflow: 'registration_confirmation', ...templates.registrationConfirmation(agent) }).then((o) => record('registration_confirmation', o))];
   if (env.smtp.adminTo) {
-    jobs.push(sendEmail({ to: env.smtp.adminTo, ...templates.adminAlert(agent) }).then((o) => record('admin_alert', o)));
+    jobs.push(sendEmail({ to: env.smtp.adminTo, workflow: 'admin_alert', ...templates.adminAlert(agent) }).then((o) => record('admin_alert', o)));
   }
   return Promise.all(jobs);
 }
 
 export async function sendDecisionEmail(agent) {
-  return record('decision', await sendEmail({ to: agent.email, ...templates.decision(agent) }));
+  return record('decision', await sendEmail({ to: agent.email, workflow: 'decision', ...templates.decision(agent) }));
 }

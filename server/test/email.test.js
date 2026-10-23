@@ -15,11 +15,13 @@ const { env } = await import('../src/config/env.js');
 
 let sent;
 let failWith;
+let rejectRecipient;
 const fake = {
   async sendMail(message) {
     if (failWith) throw Object.assign(new Error(`smtp said no for ${message.to} with pass ${env.smtp.pass}`), { code: failWith, responseCode: 535 });
     sent.push(message);
-    return { messageId: `<${sent.length}@test>`, rejected: [] };
+    if (rejectRecipient) return { messageId: `<${sent.length}@test>`, accepted: [], rejected: [message.to], response: `550 5.1.1 <${message.to}> unknown` };
+    return { messageId: `<${sent.length}@test>`, accepted: [message.to], rejected: [], response: `250 2.0.0 OK queued for ${message.to}` };
   },
   async verify() {
     if (failWith) throw Object.assign(new Error('nope'), { code: failWith });
@@ -27,9 +29,15 @@ const fake = {
   },
 };
 
+let logs;
+const realInfo = console.info;
+
 beforeEach(() => {
   sent = [];
   failWith = null;
+  rejectRecipient = false;
+  logs = [];
+  console.info = (line) => logs.push(String(line));
   email.setTransporterForTests(fake);
 });
 
@@ -99,4 +107,48 @@ test('verifies the SMTP login without sending', async () => {
   assert.equal(r.ok, false);
   assert.match(r.problems[0], /authentication failed/);
   assert.equal(sent.length, 0);
+});
+
+test('records SMTP acceptance precisely: correlation ID, counts and reply, and logs no addresses or secrets', async () => {
+  const r = await email.sendEmail({ to: 'ngozi@example.com', subject: 's', text: 't', html: 'h', workflow: 'registration_confirmation' });
+  console.info = realInfo;
+  assert.equal(r.status, 'sent');
+  assert.match(r.correlationId, /^[0-9a-f-]{36}$/);
+  assert.equal(r.accepted, 1);
+  assert.equal(r.rejected, 0);
+  assert.equal(r.smtpResponse, '250 2.0.0 OK queued for [address]', 'addresses removed from the stored reply');
+  assert.equal(sent[0].headers['X-Correlation-ID'], r.correlationId);
+  const line = logs.find((l) => l.startsWith('[email] '));
+  const entry = JSON.parse(line.slice(8));
+  assert.deepEqual([entry.correlationId, entry.workflow, entry.outcome, entry.recipientDomain, entry.accepted, entry.rejected], [r.correlationId, 'registration_confirmation', 'accepted', 'example.com', 1, 0]);
+  assert.ok(!line.includes('ngozi@') && !line.includes('not-a-real-password'));
+});
+
+test('a recipient refused by the SMTP server is a failure, never a success', async () => {
+  rejectRecipient = true;
+  const r = await email.sendEmail({ to: 'nobody@example.com', subject: 's', text: 't', html: 'h' });
+  console.info = realInfo;
+  assert.equal(r.status, 'failed');
+  assert.equal(r.accepted, 0);
+  assert.equal(r.rejected, 1);
+  assert.match(r.error, /refused the recipient/);
+  assert.ok(logs.some((l) => l.includes('"outcome":"rejected"')));
+});
+
+test('authentication and connection failures are recorded with their SMTP code and logged without secrets', async () => {
+  failWith = 'EAUTH';
+  const r = await email.sendEmail({ to: 'ngozi@example.com', subject: 's', text: 't', html: 'h', workflow: 'admin_alert' });
+  console.info = realInfo;
+  assert.equal(r.status, 'failed');
+  assert.equal(r.smtpCode, 535);
+  const line = logs.find((l) => l.includes('"outcome":"failed"'));
+  assert.ok(line.includes('"code":"EAUTH"') && line.includes('"workflow":"admin_alert"'));
+  assert.ok(!line.includes('not-a-real-password') && !line.includes('ngozi@'));
+});
+
+test('warns when admin alerts would be sent to the sending mailbox itself', () => {
+  console.info = realInfo;
+  const notices = email.emailConfigNotices({ ...env.smtp, from: 'APC <sender@example.org>', adminTo: 'Sender@example.org' });
+  assert.match(notices[0], /sending address itself/);
+  assert.deepEqual(email.emailConfigNotices(), []);
 });
