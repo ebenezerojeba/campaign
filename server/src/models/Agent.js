@@ -68,6 +68,18 @@ const agentSchema = new Schema(
       last4: String,
       hash: { type: String, select: false },
     },
+    bankDetails: {
+      bankName: String,
+      accountNameEncrypted: { type: String, select: false },
+      accountNumberEncrypted: { type: String, select: false },
+      accountNumberLast4: String,
+    },
+    identityDetails: {
+      voterRegistrationNumberEncrypted: { type: String, select: false },
+      voterRegistrationNumberLast4: String,
+      apcPartyCardNumberEncrypted: { type: String, select: false },
+      apcPartyCardNumberLast4: String,
+    },
     stateOfOrigin: { type: String, required: true },
     lgaOfOrigin: { type: String, required: true },
 
@@ -92,6 +104,7 @@ const agentSchema = new Schema(
     consent: {
       processing: { type: Boolean, required: true },
       sensitiveData: { type: Boolean, required: true },
+      financialIdentity: { type: Boolean, default: false },
       declarationAccurate: { type: Boolean, required: true },
       ageConfirmed: { type: Boolean, required: true },
       noticeVersion: String,

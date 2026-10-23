@@ -13,7 +13,7 @@ import { RegistrationSuccess } from '../components/RegistrationSuccess.jsx';
 import { STEP_SCHEMAS, STEP_FIELDS } from '../../../shared/schemas.js';
 import { LGA_NAMES, STATE } from '../../../shared/lagos.js';
 import { STATE_NAMES, lgasOfState, stateLabel } from '../../../shared/nigeria.js';
-import { AGENT_CATEGORIES, REGISTRATION_CATEGORIES, labelFor } from '../../../shared/options.js';
+import { AGENT_CATEGORIES, NIGERIAN_BANKS, REGISTRATION_CATEGORIES, labelFor } from '../../../shared/options.js';
 import { OPTIONAL_FIELDS, DOCUMENT_RULES, requiredDocuments } from '../../../shared/agentForm.js';
 import { privacyNotice } from '../content/site.js';
 import { get, post } from '../lib/api.js';
@@ -31,12 +31,17 @@ const STEPS = [
 const DRAFT_KEY = 'apc-agent-registration-draft';
 const SUCCESS_KEY = 'apc-agent-registration-success';
 // Never kept in the saved draft: consents, the honeypot and sensitive identifiers.
-const UNSAVED_FIELDS = ['ageConfirmed', 'declarationAccurate', 'consentProcessing', 'consentSensitive', 'website', 'nin', 'dateOfBirth'];
+const UNSAVED_FIELDS = [
+  'ageConfirmed', 'declarationAccurate', 'consentProcessing', 'consentSensitive', 'consentFinancialIdentity', 'website',
+  'nin', 'dateOfBirth', 'voterRegistrationNumber', 'apcPartyCardNumber', 'bankName', 'accountName', 'accountNumber',
+];
 
 const EMPTY = {
   firstName: '', middleName: '', lastName: '', email: '', phone: '',
   ...(OPTIONAL_FIELDS.dateOfBirth ? { dateOfBirth: '' } : {}),
-  ...(OPTIONAL_FIELDS.nin ? { nin: '' } : {}),
+  ...(OPTIONAL_FIELDS.financialIdentityDetails
+    ? { nin: '', voterRegistrationNumber: '', apcPartyCardNumber: '', bankName: '', accountName: '', accountNumber: '', consentFinancialIdentity: false }
+    : OPTIONAL_FIELDS.nin ? { nin: '' } : {}),
   stateOfOrigin: '', lgaOfOrigin: '',
   agentCategory: '', state: STATE, lga: '', wardCode: '', pollingUnitCode: '', electoralRequired: false,
   ward: '', pollingUnitName: '', senatorialDistrict: '',
@@ -171,6 +176,44 @@ function StepPersonal({ register, errors, control, watch, setValue }) {
           />
         )}
       </FieldGroup>
+
+      {OPTIONAL_FIELDS.financialIdentityDetails ? (
+        <>
+          <FieldGroup title="Bank details" description="Enter the banking information requested by the programme. Account details are not verified by this form.">
+            <Controller control={control} name="bankName" render={({ field }) => (
+              <Combobox
+                label="Bank name"
+                placeholder="Type to search Nigerian banks"
+                options={NIGERIAN_BANKS}
+                value={field.value}
+                onBlur={field.onBlur}
+                ref={field.ref}
+                onChange={field.onChange}
+                error={errors.bankName?.message}
+              />
+            )} />
+            <TextField label="Account name" autoComplete="name" maxLength={100} error={errors.accountName?.message} {...register('accountName')} />
+            <TextField
+              label="Account number"
+              hint="Enter exactly 10 digits. This checks the format only; it does not verify the account or account name."
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={10}
+              error={errors.accountNumber?.message}
+              {...register('accountNumber')}
+            />
+          </FieldGroup>
+          <FieldGroup title="Identification details" description="Enter the numbers exactly as printed on your documents.">
+            <TextField label="National Identification Number (NIN)" hint="Exactly 11 digits." inputMode="numeric" autoComplete="off" maxLength={11} error={errors.nin?.message} {...register('nin')} />
+            <TextField label="Voter registration number" hint="Format pending verification against the official voter card format." autoComplete="off" maxLength={40} error={errors.voterRegistrationNumber?.message} {...register('voterRegistrationNumber')} />
+            <TextField label="APC party card number" hint="Format pending verification against the official party card format." autoComplete="off" maxLength={40} error={errors.apcPartyCardNumber?.message} {...register('apcPartyCardNumber')} />
+          </FieldGroup>
+        </>
+      ) : (
+        <Alert tone="info" title="Bank and identification details are not being collected">
+          These additional fields remain switched off until their approved collection purposes and privacy notice are provided. No bank account verification service is configured.
+        </Alert>
+      )}
 
       <FieldGroup title="Where you are from" description="Your state and Local Government Area of origin.">
         <Controller control={control} name="stateOfOrigin" render={({ field }) => (
@@ -414,6 +457,13 @@ function StepReview({ values, files, errors, control, onEdit }) {
         ['Phone', values.phone],
         ['Date of birth', values.dateOfBirth],
         ['NIN', values.nin && `•••••••${values.nin.replace(/\s/g, '').slice(-4)}`],
+        ...(OPTIONAL_FIELDS.financialIdentityDetails ? [
+          ['Bank', labelFor(NIGERIAN_BANKS, values.bankName)],
+          ['Account name', values.accountName],
+          ['Account number', values.accountNumber && `••••••${values.accountNumber.slice(-4)}`],
+          ['Voter registration number', values.voterRegistrationNumber && `••••${values.voterRegistrationNumber.slice(-4)}`],
+          ['APC party card number', values.apcPartyCardNumber && `••••${values.apcPartyCardNumber.slice(-4)}`],
+        ] : []),
         ['Origin', values.lgaOfOrigin && `${values.lgaOfOrigin}, ${stateLabel(values.stateOfOrigin)}`],
       ]} />
       <ReviewSection title="Your role and polling unit" step={1} onEdit={onEdit} rows={[
@@ -456,9 +506,16 @@ function StepReview({ values, files, errors, control, onEdit }) {
         )} />
         <Controller control={control} name="consentSensitive" render={({ field }) => (
           <Checkbox checked={field.value} onChange={field.onChange} error={errors.consentSensitive?.message}>
-            I consent to APC Lagos storing my passport photograph and voter’s card{OPTIONAL_FIELDS.nin ? ', and my NIN,' : ''} so that authorised staff can verify my registration.
+            I consent to APC Lagos storing my passport photograph and voter’s card{OPTIONAL_FIELDS.nin || OPTIONAL_FIELDS.financialIdentityDetails ? ', and my NIN,' : ''} so that authorised staff can verify my registration.
           </Checkbox>
         )} />
+        {OPTIONAL_FIELDS.financialIdentityDetails && (
+          <Controller control={control} name="consentFinancialIdentity" render={({ field }) => (
+            <Checkbox checked={field.value} onChange={field.onChange} error={errors.consentFinancialIdentity?.message}>
+              I consent to the use of my banking and identification details as described in the approved privacy notice.
+            </Checkbox>
+          )} />
+        )}
         <Controller control={control} name="consentProcessing" render={({ field }) => (
           <Checkbox checked={field.value} onChange={field.onChange} error={errors.consentProcessing?.message}>
             I agree that APC Lagos may use the information in this form to register me as a polling unit agent and contact me about it, as described in the privacy notice.

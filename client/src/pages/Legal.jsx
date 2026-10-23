@@ -23,6 +23,8 @@ function Privacy() {
 
       <Section title="What we collect">
         <p>Your name, email address, phone number{OPTIONAL_FIELDS.dateOfBirth ? ', date of birth' : ''}, state and LGA of origin{extra.length ? `, ${extra.join(', ')}` : ''}, your agent category, and the LGA, ward and polling unit you will serve, with its INEC code and senatorial district.</p>
+        {!OPTIONAL_FIELDS.financialIdentityDetails && <p>Bank account and additional identification-number fields are not currently collected. They will remain off until the programme approves and publishes their specific purposes and handling in this notice.</p>}
+        {OPTIONAL_FIELDS.financialIdentityDetails && <p>Bank account and identification details are collected only for the purposes specifically approved and described by the programme in this notice. Account-format checks do not verify account ownership, and identification numbers are not verified unless an authorised service confirms them.</p>}
         <p>We also collect a passport photograph and a photo or scan of your Permanent Voter Card (PVC){OPTIONAL_FIELDS.selfie ? ' and a selfie' : ''}. These are sensitive: they identify you and show your voter registration details.</p>
         <p>We do not ask for bank details, your home address, location from your device, or information about your religion or ethnicity. Photo location data (GPS) is removed from JPEG images when they are uploaded.</p>
       </Section>

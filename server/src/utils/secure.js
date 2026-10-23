@@ -1,4 +1,4 @@
-// Field-level encryption for highly sensitive values (NIN). AES-256-GCM with a
+// Field-level encryption for highly sensitive registration values. AES-256-GCM with a
 // key from DATA_ENCRYPTION_KEY, so a database copy alone does not reveal them.
 import crypto from 'node:crypto';
 import { env } from '../config/env.js';

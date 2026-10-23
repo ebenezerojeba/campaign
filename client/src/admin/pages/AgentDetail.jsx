@@ -158,23 +158,41 @@ function Documents({ agent }) {
   );
 }
 
-function Nin({ agent }) {
+function SensitiveDetails({ agent }) {
   const { api, user } = useAdmin();
-  const [nin, setNin] = useState(null);
+  const [details, setDetails] = useState(null);
   const [error, setError] = useState(null);
-  if (!agent.nin?.last4) return null;
+  const hasDetails = agent.nin?.last4 || agent.bankDetails?.bankName || agent.identityDetails?.voterRegistrationNumberLast4 || agent.identityDetails?.apcPartyCardNumberLast4;
+  if (!hasDetails) return null;
   const reveal = async () => {
     setError(null);
-    try { setNin((await api.post(`/agents/${agent._id}/nin`)).nin); } catch (err) { setError(err.message); }
+    try { setDetails(await api.post(`/agents/${agent._id}/sensitive-details`)); } catch (err) { setError(err.message); }
   };
   return (
-    <Row label="NIN">
-      <span className="flex flex-wrap items-center gap-3">
-        <span className="font-mono tabular">{nin ?? `•••••••${agent.nin.last4}`}</span>
-        {!nin && can(user, 'documents:read') && <button type="button" onClick={reveal} className="inline-flex items-center gap-1 text-sm font-semibold text-green-700 hover:underline"><Eye className="size-3.5" aria-hidden />Reveal (logged)</button>}
-        {error && <span className="text-sm text-danger-700">{error}</span>}
-      </span>
-    </Row>
+    <>
+      <Row label="Sensitive details">
+        {can(user, 'agents:sensitive:read') ? (
+          <div className="space-y-2">
+            {!details ? (
+              <p className="text-sm text-slate-600">Banking and identification values are masked. Revealing them is restricted to administrators and recorded in the audit log.</p>
+            ) : (
+              <dl className="grid gap-2 sm:grid-cols-2">
+                {details.bankName && <div><dt className="text-xs text-slate-500">Bank</dt><dd>{details.bankName}</dd></div>}
+                {details.accountName && <div><dt className="text-xs text-slate-500">Account name</dt><dd>{details.accountName}</dd></div>}
+                {details.accountNumber && <div><dt className="text-xs text-slate-500">Account number</dt><dd className="font-mono">{details.accountNumber}</dd></div>}
+                {details.nin && <div><dt className="text-xs text-slate-500">NIN</dt><dd className="font-mono">{details.nin}</dd></div>}
+                {details.voterRegistrationNumber && <div><dt className="text-xs text-slate-500">Voter registration number <span className="font-normal">(format pending verification)</span></dt><dd className="font-mono">{details.voterRegistrationNumber}</dd></div>}
+                {details.apcPartyCardNumber && <div><dt className="text-xs text-slate-500">APC party card number <span className="font-normal">(format pending verification)</span></dt><dd className="font-mono">{details.apcPartyCardNumber}</dd></div>}
+                {details.bankAccountVerification && <div><dt className="text-xs text-slate-500">Bank account name check</dt><dd>{details.bankAccountVerification.message}</dd></div>}
+                {details.identityVerification && <div><dt className="text-xs text-slate-500">Identity checks</dt><dd>{details.identityVerification.message}</dd></div>}
+              </dl>
+            )}
+            {!details && <button type="button" onClick={reveal} className="inline-flex items-center gap-1 text-sm font-semibold text-green-700 hover:underline"><Eye className="size-3.5" aria-hidden />Reveal (logged)</button>}
+            {error && <p role="alert" className="text-sm text-danger-700">{error}</p>}
+          </div>
+        ) : <span className="text-sm text-slate-500">These details are restricted to administrators.</span>}
+      </Row>
+    </>
   );
 }
 
@@ -264,7 +282,7 @@ export default function AgentDetail() {
                 </span>
               </Row>
               <Row label="Date of birth">{a.dateOfBirth && formatDate(`${a.dateOfBirth}T12:00:00+01:00`)}</Row>
-              <Nin agent={a} />
+              <SensitiveDetails agent={a} />
               <Row label="Origin">{a.lgaOfOrigin && `${a.lgaOfOrigin} LGA, ${stateLabel(a.stateOfOrigin)}`}</Row>
               <Row label="LGA">{`${a.lga} LGA, ${a.state ?? 'Lagos'} State`}</Row>
               <Row label="Ward">{a.ward && <>{a.ward}<span className="ml-1.5 text-sm text-slate-500 tabular">{a.wardCode}</span></>}</Row>

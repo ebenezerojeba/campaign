@@ -14,6 +14,39 @@ export const AGENT_CATEGORIES = [
 
 export const REGISTRATION_CATEGORIES = AGENT_CATEGORIES.filter(({ value }) => value !== 'agent');
 
+export const NIGERIAN_BANKS = [
+  'Access Bank',
+  'Citibank Nigeria',
+  'Ecobank Nigeria',
+  'Fidelity Bank',
+  'First Bank of Nigeria',
+  'First City Monument Bank',
+  'Globus Bank',
+  'Guaranty Trust Bank',
+  'Keystone Bank',
+  'Kuda Microfinance Bank',
+  'Lotus Bank',
+  'Moniepoint Microfinance Bank',
+  'OPay',
+  'Optimus Bank',
+  'Parallex Bank',
+  'PalmPay',
+  'Polaris Bank',
+  'PremiumTrust Bank',
+  'Providus Bank',
+  'Stanbic IBTC Bank',
+  'Standard Chartered Bank Nigeria',
+  'Sterling Bank',
+  'SunTrust Bank Nigeria',
+  'TAJBank',
+  'Titan Trust Bank',
+  'Union Bank of Nigeria',
+  'United Bank for Africa',
+  'Unity Bank',
+  'Wema Bank',
+  'Zenith Bank',
+].map((name) => ({ value: name, label: name }));
+
 export const REGISTRATION_STATUSES = [
   { value: 'pending', label: 'Pending review' },
   { value: 'approved', label: 'Approved' },
@@ -26,7 +59,7 @@ export const DOCUMENT_KINDS = [
   { value: 'selfie', label: 'Selfie' },
 ];
 
-export const PRIVACY_NOTICE_VERSION = '2026-10-agents-v2';
+export const PRIVACY_NOTICE_VERSION = '2026-10-agents-v3';
 
 export const labelFor = (list, value) => list.find((o) => o.value === value)?.label ?? value;
 export const valuesOf = (list) => list.map((o) => o.value);

@@ -13,7 +13,7 @@ process.env.DEMO_MODE = '';
 const { MongoMemoryServer } = await import('mongodb-memory-server-core');
 const mongoose = (await import('mongoose')).default;
 const request = (await import('supertest')).default;
-const { roleSchema } = await import('../../shared/schemas.js');
+const { roleSchema, registrationSchema } = await import('../../shared/schemas.js');
 
 let mongo;
 let app;
@@ -144,6 +144,25 @@ describe('agent registration', () => {
     const res = await submit({ ...valid, phone: '08091110002', email: 'a2@example.com', agentCategory: 'volunteer' });
     assert.equal(res.status, 422);
     assert.ok(fieldsOf(res).agentCategory);
+  });
+
+  test('rejects financial and identity details while their collection switch is off', () => {
+    const parsed = registrationSchema.safeParse({
+      ...valid,
+      bankName: 'Access Bank',
+      accountName: 'Ngozi Okafor',
+      accountNumber: '0123456789',
+      nin: '12345678901',
+      voterRegistrationNumber: 'AB-123456',
+      apcPartyCardNumber: 'APC-123456',
+    });
+    assert.equal(parsed.success, false);
+    assert.deepEqual(
+      ['bankName', 'accountName', 'accountNumber', 'nin', 'voterRegistrationNumber', 'apcPartyCardNumber']
+        .filter((key) => parsed.error.issues.some((issue) => issue.path[0] === key))
+        .sort(),
+      ['accountName', 'accountNumber', 'apcPartyCardNumber', 'bankName', 'nin', 'voterRegistrationNumber'],
+    );
   });
 
   test('requires date of birth and offers Agent 1 and Agent 2 instead of Agent', async () => {

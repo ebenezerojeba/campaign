@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { STATE, LGA_NAMES } from './lagos.js';
 import { STATE_NAMES, isValidStateLga } from './nigeria.js';
-import { REGISTRATION_CATEGORIES, valuesOf } from './options.js';
+import { NIGERIAN_BANKS, REGISTRATION_CATEGORIES, valuesOf } from './options.js';
 import { OPTIONAL_FIELDS } from './agentForm.js';
 
 const NAME_RE = /^[\p{L}][\p{L}\p{M}' .-]*$/u;
@@ -56,8 +56,20 @@ const dateOfBirth = z.string({ required_error: 'Enter your date of birth' })
   .refine((v) => ageOn(v) >= 18, 'You must be 18 or older to register')
   .refine((v) => ageOn(v) <= 110, 'Check the year of your date of birth');
 
-const nin = z.string({ required_error: 'Enter your NIN' }).transform((v) => v.replace(/\s/g, ''))
-  .pipe(z.string().regex(NIN_RE, 'Your NIN is the 11-digit number on your NIN slip or National ID card'));
+const nin = z.string({ required_error: 'Enter your NIN' }).trim()
+  .regex(NIN_RE, 'Enter your 11-digit NIN without spaces');
+const accountNumber = z.string({ required_error: 'Enter your account number' }).trim()
+  .regex(/^\d{10}$/, 'Enter the 10-digit account number without spaces');
+const identityNumber = (label) => z.string({ required_error: `Enter your ${label}` }).trim()
+  .min(3, `Enter your ${label}`)
+  .max(40, `${label[0].toUpperCase()}${label.slice(1)} must be 40 characters or fewer`)
+  .regex(/^[\p{L}\p{N}][\p{L}\p{N} /-]*$/u, `Use letters, numbers, spaces, hyphens or slashes in your ${label}`);
+const accountName = z.string({ required_error: 'Enter the account name' }).trim()
+  .min(2, 'Enter the account name')
+  .max(100, 'Account name must be 100 characters or fewer')
+  .regex(/^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N}' .&()/-]*$/u, 'Check the account name');
+
+const sensitiveDetailsDisabled = z.never().optional();
 
 export const personalSchema = z.object({
   firstName: name('first name'),
@@ -68,7 +80,21 @@ export const personalSchema = z.object({
   stateOfOrigin: z.enum(STATE_NAMES, { errorMap: () => ({ message: 'Choose your state of origin' }) }),
   lgaOfOrigin: z.string({ required_error: 'Choose your LGA of origin' }).trim().min(1, 'Choose your LGA of origin').max(80),
   ...(OPTIONAL_FIELDS.dateOfBirth ? { dateOfBirth } : {}),
-  ...(OPTIONAL_FIELDS.nin ? { nin } : {}),
+  ...(OPTIONAL_FIELDS.financialIdentityDetails ? {
+    nin,
+    voterRegistrationNumber: identityNumber('voter registration number'),
+    apcPartyCardNumber: identityNumber('APC party card number'),
+    bankName: z.enum(valuesOf(NIGERIAN_BANKS), { errorMap: () => ({ message: 'Choose a bank from the list' }) }),
+    accountName,
+    accountNumber,
+  } : OPTIONAL_FIELDS.nin ? { nin } : {
+    nin: sensitiveDetailsDisabled,
+    voterRegistrationNumber: sensitiveDetailsDisabled,
+    apcPartyCardNumber: sensitiveDetailsDisabled,
+    bankName: sensitiveDetailsDisabled,
+    accountName: sensitiveDetailsDisabled,
+    accountNumber: sensitiveDetailsDisabled,
+  }),
 });
 
 export const roleSchema = z.object({
@@ -89,6 +115,9 @@ export const consentSchema = z.object({
   declarationAccurate: z.literal(true, { errorMap: () => ({ message: 'Confirm that your details and documents are your own and accurate' }) }),
   consentProcessing: z.literal(true, { errorMap: () => ({ message: 'Agree to the privacy notice to submit your registration' }) }),
   consentSensitive: z.literal(true, { errorMap: () => ({ message: 'Agree to the use of your photograph and voter’s card for verification' }) }),
+  ...(OPTIONAL_FIELDS.financialIdentityDetails
+    ? { consentFinancialIdentity: z.literal(true, { errorMap: () => ({ message: 'Consent is required to submit these additional details' }) }) }
+    : { consentFinancialIdentity: sensitiveDetailsDisabled }),
 });
 
 function refinePersonal(data, ctx) {

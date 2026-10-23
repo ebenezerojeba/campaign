@@ -9,7 +9,7 @@ export const ROLES = ['admin', 'reviewer'];
 // documents:read covers passport photos, voter's cards and selfies; remove it
 // from a role to stop that role opening them.
 export const PERMISSIONS = {
-  admin: ['agents:read', 'agents:review', 'agents:export', 'agents:delete', 'documents:read', 'audit:read', 'staff:manage'],
+  admin: ['agents:read', 'agents:review', 'agents:export', 'agents:delete', 'agents:sensitive:read', 'documents:read', 'audit:read', 'staff:manage'],
   reviewer: ['agents:read', 'agents:review', 'documents:read'],
 };
 

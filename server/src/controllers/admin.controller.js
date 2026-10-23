@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { Agent } from '../models/Agent.js';
-import { User } from '../models/User.js';
+import { PERMISSIONS, User } from '../models/User.js';
 import { AuditLog } from '../models/misc.js';
 import { ApiError, send } from '../utils/ApiError.js';
 import { toCsv } from '../utils/csv.js';
@@ -163,10 +163,46 @@ export async function getAgent(req, res) {
   if (!a) throw ApiError.notFound('This registration does not exist');
   const auditTrail = await AuditLog.find({ targetType: 'Agent', targetId: String(a._id) }).sort({ createdAt: -1 }).limit(50).lean();
   await audit(req, { action: 'agent.viewed', targetType: 'Agent', targetId: a._id, summary: `Viewed ${a.reference}` });
-  send(res, { ...a, nin: a.nin?.last4 ? { last4: a.nin.last4 } : undefined, documents: publicDocuments(a.documents), auditTrail });
+  const isSensitiveAdmin = PERMISSIONS[req.user.role]?.includes('agents:sensitive:read');
+  send(res, {
+    ...a,
+    ...(isSensitiveAdmin ? {} : { dateOfBirth: undefined, nin: undefined, bankDetails: undefined, identityDetails: undefined }),
+    nin: isSensitiveAdmin && a.nin?.last4 ? { last4: a.nin.last4 } : undefined,
+    bankDetails: isSensitiveAdmin && a.bankDetails?.bankName
+      ? { bankName: a.bankDetails.bankName, accountNumberLast4: a.bankDetails.accountNumberLast4 }
+      : undefined,
+    identityDetails: isSensitiveAdmin && a.identityDetails
+      ? {
+        voterRegistrationNumberLast4: a.identityDetails.voterRegistrationNumberLast4,
+        apcPartyCardNumberLast4: a.identityDetails.apcPartyCardNumberLast4,
+      }
+      : undefined,
+    documents: publicDocuments(a.documents),
+    auditTrail,
+  });
 }
 
-// Full NIN on request only, and every reveal is logged.
+// Sensitive registration values are returned only to admins on an explicit,
+// audit-logged reveal; ordinary detail and list responses remain masked.
+export async function revealSensitiveDetails(req, res) {
+  const a = await Agent.findById(req.params.id)
+    .select('+nin.encrypted +bankDetails.accountNameEncrypted +bankDetails.accountNumberEncrypted +identityDetails.voterRegistrationNumberEncrypted +identityDetails.apcPartyCardNumberEncrypted reference')
+    .lean();
+  if (!a) throw ApiError.notFound('This registration does not exist');
+  await audit(req, { action: 'agent.sensitive_details_revealed', targetType: 'Agent', targetId: a._id, summary: `Revealed sensitive details for ${a.reference}` });
+  send(res, {
+    bankName: a.bankDetails?.bankName,
+    accountName: a.bankDetails?.accountNameEncrypted ? decryptField(a.bankDetails.accountNameEncrypted) : undefined,
+    accountNumber: a.bankDetails?.accountNumberEncrypted ? decryptField(a.bankDetails.accountNumberEncrypted) : undefined,
+    nin: a.nin?.encrypted ? decryptField(a.nin.encrypted) : undefined,
+    voterRegistrationNumber: a.identityDetails?.voterRegistrationNumberEncrypted ? decryptField(a.identityDetails.voterRegistrationNumberEncrypted) : undefined,
+    apcPartyCardNumber: a.identityDetails?.apcPartyCardNumberEncrypted ? decryptField(a.identityDetails.apcPartyCardNumberEncrypted) : undefined,
+    bankAccountVerification: { status: 'not_verified', message: 'No bank account verification service is configured.' },
+    identityVerification: { status: 'not_verified', message: 'Identification details have not been verified by an authorised service.' },
+  });
+}
+
+// NIN reveal is retained for compatibility and is also admin-only/audit-logged.
 export async function revealNin(req, res) {
   const a = await Agent.findById(req.params.id).select('+nin.encrypted reference').lean();
   if (!a?.nin?.encrypted) throw ApiError.notFound('No NIN is recorded for this registration');

@@ -10,6 +10,9 @@ export const OPTIONAL_FIELDS = {
   dateOfBirth: true,
   nin: false,
   selfie: false,
+  // Keep disabled until the programme approves and publishes the purpose for
+  // collecting financial and identification data.
+  financialIdentityDetails: false,
 };
 
 const MB = 1024 * 1024;

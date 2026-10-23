@@ -54,9 +54,10 @@ export const site = {
 };
 
 export const privacyNotice = {
-  version: '2026-10-agents-v2',
+  version: '2026-10-agents-v3',
   summary: [
     'We collect your date of birth to confirm you meet the age requirement, and use your details, passport photograph and voter’s card to register and verify you as a polling unit agent and contact you about it.',
+    'Bank account and additional identification-number fields are not currently collected. They will remain off until the programme approves and publishes their specific purposes and handling in the privacy notice.',
     'Your documents are stored securely. Only authorised registration staff can open them, and every view is logged.',
     'Upload checks confirm each file is a genuine image or PDF. They do not prove your voter’s card is authentic: staff check that separately.',
     'We keep your registration for the election period it was collected for and up to 12 months after, then delete it and your documents.',

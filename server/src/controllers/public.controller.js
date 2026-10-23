@@ -96,11 +96,27 @@ export async function register(req, res) {
   }
 
   let nin;
-  if (OPTIONAL_FIELDS.nin) {
+  let bankDetails;
+  let identityDetails;
+  if (OPTIONAL_FIELDS.nin || OPTIONAL_FIELDS.financialIdentityDetails) {
     const encrypted = encryptField(data.nin); // fails clearly if no key is configured
     const hash = ninIndex(data.nin);
     if (await Agent.exists({ 'nin.hash': hash })) throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
     nin = { encrypted, last4: data.nin.slice(-4), hash };
+  }
+  if (OPTIONAL_FIELDS.financialIdentityDetails) {
+    bankDetails = {
+      bankName: data.bankName,
+      accountNameEncrypted: encryptField(data.accountName),
+      accountNumberEncrypted: encryptField(data.accountNumber),
+      accountNumberLast4: data.accountNumber.slice(-4),
+    };
+    identityDetails = {
+      voterRegistrationNumberEncrypted: encryptField(data.voterRegistrationNumber),
+      voterRegistrationNumberLast4: data.voterRegistrationNumber.slice(-4),
+      apcPartyCardNumberEncrypted: encryptField(data.apcPartyCardNumber),
+      apcPartyCardNumberLast4: data.apcPartyCardNumber.slice(-4),
+    };
   }
 
   const doc = {
@@ -111,6 +127,8 @@ export async function register(req, res) {
     phone,
     dateOfBirth: OPTIONAL_FIELDS.dateOfBirth ? data.dateOfBirth : undefined,
     nin,
+    bankDetails,
+    identityDetails,
     stateOfOrigin: data.stateOfOrigin,
     lgaOfOrigin: data.lgaOfOrigin,
     agentCategory: data.agentCategory,
@@ -120,6 +138,7 @@ export async function register(req, res) {
     consent: {
       processing: true,
       sensitiveData: true,
+      financialIdentity: OPTIONAL_FIELDS.financialIdentityDetails,
       declarationAccurate: true,
       ageConfirmed: true,
       noticeVersion: PRIVACY_NOTICE_VERSION,

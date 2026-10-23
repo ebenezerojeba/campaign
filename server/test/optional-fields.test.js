@@ -36,7 +36,7 @@ function png(width, height, shade) {
 const base = {
   firstName: 'Tunde', lastName: 'Bello', email: 'tunde@example.com', phone: '08035550000',
   stateOfOrigin: 'Oyo', lgaOfOrigin: 'Ibadan North', agentCategory: 'canvasser', state: 'Lagos', lga: 'Ikeja',
-  wardCode: '11-01', pollingUnitCode: '24-11-01-001', dateOfBirth: '1990-05-17', nin: '123 4567 8901',
+  wardCode: '11-01', pollingUnitCode: '24-11-01-001', dateOfBirth: '1990-05-17', nin: '12345678901',
   ageConfirmed: true, declarationAccurate: true, consentProcessing: true, consentSensitive: true,
 };
 
