@@ -23,7 +23,7 @@ export const site = {
 
   hero: {
     headline: ['Your polling unit.', 'Your ward.', 'Your Lagos.'],
-    body: 'Register as an APC Lagos agent, canvasser, mobilizer or polling unit agent for the polling unit where you will serve. It takes about ten minutes on a phone.',
+    body: 'Register as an APC Lagos polling unit agent, Agent 1 or Agent 2, for the polling unit where you will serve. It takes about ten minutes on a phone.',
     primary: 'Start registration',
     secondary: 'See what you need',
   },

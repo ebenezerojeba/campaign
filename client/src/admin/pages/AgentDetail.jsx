@@ -163,6 +163,10 @@ function SensitiveDetails({ agent }) {
   const [details, setDetails] = useState(null);
   const [error, setError] = useState(null);
   const hasDetails = agent.nin?.last4 || agent.bankDetails?.bankName || agent.identityDetails?.vinLast4 || agent.identityDetails?.apcPartyRegistrationNumberLast4;
+  // The server sends these only to roles allowed to see them; say so to everyone else.
+  if (!can(user, 'agents:sensitive:read')) {
+    return <Row label="Identity and bank details"><span className="text-sm text-slate-500">These details are restricted to administrators.</span></Row>;
+  }
   if (!hasDetails) return null;
   const reveal = async () => {
     setError(null);

@@ -17,7 +17,8 @@ export async function health(_req, res) {
   if (dbConfigured() && db !== 'connected') {
     try { await connectDb(); db = dbState(); } catch { db = 'unreachable'; }
   }
-  res.json({ ok: true, data: { status: 'up', db, time: new Date().toISOString() } });
+  // Readiness flags only: never the settings themselves.
+  res.json({ ok: true, data: { status: 'up', db, email: emailConfigured() ? 'configured' : 'not_configured', encryption: env.dataEncryptionKey.length >= 32 ? 'configured' : 'not_configured', time: new Date().toISOString() } });
 }
 
 // Public, non-secret configuration used by the frontend.

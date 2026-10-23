@@ -26,6 +26,14 @@ if (env.isProd && !(env.demoMode && args.has('--allow-demo'))) {
   process.exit(1);
 }
 
+// A local .env can point at a hosted (possibly production) database: only seed
+// one on purpose.
+const remote = env.mongoUri && !/^mongodb:\/\/(127\.0\.0\.1|localhost)[:/]/.test(env.mongoUri);
+if (remote && !args.has('--allow-remote')) {
+  console.error('Refusing to seed a remote database from this machine. Unset MONGODB_URI to use the local development database, or pass --allow-remote for a dedicated demo database.');
+  process.exit(1);
+}
+
 const FIRST = ['Adebayo', 'Chiamaka', 'Oluwaseun', 'Ngozi', 'Ibrahim', 'Funmilayo', 'Emeka', 'Aisha', 'Tunde', 'Folake', 'Yusuf', 'Kemi', 'Chinedu', 'Bisola', 'Musa', 'Temitope', 'Ifeoma', 'Babatunde', 'Zainab', 'Segun', 'Amaka', 'Olumide', 'Halima', 'Kunle', 'Nkechi', 'Damilola', 'Sadiq', 'Yetunde', 'Obinna', 'Ronke'];
 const LAST = ['Adeyemi', 'Okafor', 'Balogun', 'Eze', 'Bello', 'Ogunleye', 'Nwosu', 'Lawal', 'Adeleke', 'Okonkwo', 'Salami', 'Afolabi', 'Abubakar', 'Oyelaran', 'Chukwu', 'Olawale', 'Ibekwe', 'Akande', 'Danjuma', 'Fashola', 'Onyeka', 'Ajayi', 'Oladipo', 'Uche', 'Sanni'];
 // Weighted toward the most populous LGAs.

@@ -56,7 +56,7 @@ function Terms() {
       <h1 className="type-h2 text-forest-900">Terms of use</h1>
       <p className="mt-3 text-sm text-slate-500">These terms must be reviewed before launch.</p>
       <Section title="Using this website">
-        <p>This website lets people register as an agent, canvasser, mobilizer or polling unit agent for a polling unit in Lagos State. Registering does not guarantee appointment or any payment.</p>
+        <p>This website lets people register as an APC Lagos polling unit agent (Agent 1 or Agent 2) for a polling unit in Lagos State. Registering does not guarantee appointment or any payment.</p>
       </Section>
       <Section title="Your information and documents">
         <p>Register only yourself, give accurate information, and upload only your own passport photograph and voter’s card. Submitting another person’s documents, or altered documents, is not allowed and will lead to your registration being rejected. Our <Link to="/privacy" className="font-semibold text-green-700 underline underline-offset-4">privacy notice</Link> explains how your information is used.</p>

@@ -14,6 +14,11 @@ if (isProd && JWT_SECRET.length < 32) {
   console.error('[config] JWT_SECRET must be set to at least 32 random characters in production. Sign-in is disabled.');
 }
 
+// Registrations hold encrypted identity and bank details: without a key they are refused.
+if ((process.env.DATA_ENCRYPTION_KEY || '').length < 32) {
+  console.error('[config] DATA_ENCRYPTION_KEY must be set to at least 32 random characters. Registration is disabled until it is.');
+}
+
 const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '';
 
 export const env = {

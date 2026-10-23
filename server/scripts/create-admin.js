@@ -1,7 +1,10 @@
-// Provisions a staff account. There is no public admin sign-up.
+// Provisions a staff account, or resets an existing one's password and signs
+// out its sessions. There is no public admin sign-up.
 //   npm run create-admin -- --email you@example.org --name "Your Name" --role admin
 // The password is read from ADMIN_PASSWORD or typed at a hidden prompt; it is
 // never accepted as a command-line argument (which would land in shell history).
+// Add --public-dns if MongoDB Atlas fails with "querySrv EBADRESP" on your network.
+import dns from 'node:dns';
 import mongoose from 'mongoose';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -23,6 +26,9 @@ function hiddenPrompt(question) {
     rl.question(question, (answer) => { rl.close(); process.stdout.write('\n'); resolve(answer); });
   });
 }
+
+// Public resolvers for networks whose DNS cannot resolve Atlas SRV records.
+if (process.argv.includes('--public-dns')) dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 async function main() {
   const email = arg('email')?.toLowerCase();

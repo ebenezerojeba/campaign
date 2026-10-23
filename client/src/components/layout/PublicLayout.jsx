@@ -123,7 +123,7 @@ function SiteFooter() {
         <div>
           <Logo tone="light" />
           <p className="mt-5 max-w-sm text-[15px] leading-relaxed text-green-50/70">
-            Registration for agents, canvassers, mobilizers and polling unit agents serving at polling units across Lagos State.
+            Registration for APC Lagos polling unit agents (Agent 1 and Agent 2) serving at polling units across Lagos State.
           </p>
         </div>
         <div>

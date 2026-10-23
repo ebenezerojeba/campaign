@@ -5,7 +5,7 @@ import { env } from '../config/env.js';
 import { ApiError } from './ApiError.js';
 
 const key = () => {
-  if (!env.dataEncryptionKey) throw ApiError.unavailable('Secure storage is not configured on this server', 'ENCRYPTION_NOT_CONFIGURED');
+  if (env.dataEncryptionKey.length < 32) throw ApiError.unavailable('Secure storage is not configured on this server', 'ENCRYPTION_NOT_CONFIGURED');
   return crypto.createHash('sha256').update(env.dataEncryptionKey).digest();
 };
 
