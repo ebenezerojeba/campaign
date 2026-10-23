@@ -16,8 +16,20 @@ const oneLine = (value) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').trim()
 function senderFrom(config) {
   const match = config.from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
   const address = (match ? match[2] : config.from).trim() || config.user;
-  const name = oneLine(config.fromName || (match ? match[1] : '') || 'APC Lagos Agent Registration');
+  const name = oneLine(config.fromName || (match ? match[1] : '') || 'APC Lagos');
   return { address, name };
+}
+
+const domain = (address) => String(address).split('@')[1]?.toLowerCase() ?? '';
+
+// Replies always go to an official mailbox: EMAIL_REPLY_TO is used only when
+// it is on the sender's own domain; anything else (for example a personal
+// Gmail address) is ignored and the sender address is used instead.
+export function replyToFor(config = env.smtp) {
+  const sender = senderFrom(config);
+  const configured = config.replyTo?.trim();
+  const usable = configured && isSafeAddress(configured) && domain(configured) === domain(sender.address);
+  return { name: sender.name, address: usable ? configured : sender.address };
 }
 
 // Returns the problems with the current SMTP settings, without their values.
@@ -114,7 +126,7 @@ export async function sendEmail({ to, subject, html, text, workflow = 'email' })
     const info = await getTransporter().sendMail({
       from: { name, address },
       to,
-      replyTo: isSafeAddress(env.smtp.replyTo) ? env.smtp.replyTo : undefined,
+      replyTo: replyToFor(),
       subject: oneLine(subject),
       html,
       text,
@@ -137,6 +149,12 @@ export async function sendEmail({ to, subject, html, text, workflow = 'email' })
 export function emailConfigNotices(config = env.smtp) {
   const notices = [];
   const { address } = senderFrom(config);
+  if (config.replyTo && replyToFor(config).address !== config.replyTo.trim()) {
+    notices.push('EMAIL_REPLY_TO is not on the sender\'s domain, so it is ignored: replies go to the sender address. Remove it or use an address on the official domain.');
+  }
+  if (/@(gmail|googlemail|yahoo|outlook|hotmail|live|icloud)\./i.test(address)) {
+    notices.push('EMAIL_FROM is a personal mailbox. Use the official sender, for example notifications@apclagos.org.');
+  }
   if (config.adminTo && config.adminTo.toLowerCase() === address.toLowerCase()) {
     notices.push('ADMIN_NOTIFICATION_EMAIL is the sending address itself. Gmail files messages you send to yourself under Sent, not the Inbox, so admin alerts can look missing. Use a different notification address.');
   }

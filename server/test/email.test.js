@@ -5,10 +5,15 @@ import assert from 'node:assert/strict';
 process.env.NODE_ENV = 'test';
 process.env.SMTP_HOST = 'smtp.example.org';
 process.env.SMTP_PORT = '465';
-process.env.SMTP_USER = 'sender@example.org';
+process.env.SMTP_USER = 'notifications@apclagos.org';
 process.env.SMTP_PASS = 'not-a-real-password';
-process.env.EMAIL_FROM = 'APC Lagos Agent Registration <sender@example.org>';
+process.env.EMAIL_FROM = 'notifications@apclagos.org';
+process.env.EMAIL_FROM_NAME = 'APC Lagos';
+// A personal reply address must never reach a message.
+process.env.EMAIL_REPLY_TO = 'ayindegeorge20@gmail.com';
+process.env.FRONTEND_URL = 'https://www.apclagos.org';
 process.env.ADMIN_NOTIFICATION_EMAIL = 'alerts@example.org';
+const OFFICIAL = { name: 'APC Lagos', address: 'notifications@apclagos.org' };
 
 const email = await import('../src/services/email.js');
 const { env } = await import('../src/config/env.js');
@@ -67,17 +72,17 @@ test('registration sends a confirmation to the applicant and an alert to the adm
   const records = await email.sendRegistrationEmails(agent);
   assert.deepEqual(records.map((r) => [r.type, r.status]), [['registration_confirmation', 'sent'], ['admin_alert', 'sent']]);
   assert.deepEqual(sent.map((m) => m.to), ['ngozi@example.com', 'alerts@example.org']);
-  assert.deepEqual(sent[0].from, { name: 'APC Lagos Agent Registration', address: 'sender@example.org' });
-  assert.equal(sent[0].subject, 'Registration received: LAG-TEST-0001');
+  assert.deepEqual(sent[0].from, OFFICIAL);
+  assert.equal(sent[0].subject, 'APC Lagos: Registration Confirmation (LAG-TEST-0001)');
   assert.match(sent[0].text, /LAG-TEST-0001/);
-  assert.match(sent[1].subject, /^New agent registration: LAG-TEST-0001/);
+  assert.equal(sent[1].subject, 'APC Lagos: New Agent Registration (LAG-TEST-0001)');
   assert.ok(!sent[1].text.includes('ngozi@example.com'), 'admin alert carries no contact details');
 });
 
 test('decision emails go to the applicant', async () => {
   const r = await email.sendDecisionEmail(agent);
   assert.equal(r.status, 'sent');
-  assert.equal(sent[0].subject, 'Registration approved: LAG-TEST-0001');
+  assert.equal(sent[0].subject, 'APC Lagos: Registration Approved (LAG-TEST-0001)');
 });
 
 test('refuses recipients and subjects that could inject headers', async () => {
@@ -148,7 +153,80 @@ test('authentication and connection failures are recorded with their SMTP code a
 
 test('warns when admin alerts would be sent to the sending mailbox itself', () => {
   console.info = realInfo;
-  const notices = email.emailConfigNotices({ ...env.smtp, from: 'APC <sender@example.org>', adminTo: 'Sender@example.org' });
+  const notices = email.emailConfigNotices({ ...env.smtp, replyTo: '', from: 'APC <sender@example.org>', adminTo: 'Sender@example.org' });
   assert.match(notices[0], /sending address itself/);
-  assert.deepEqual(email.emailConfigNotices(), []);
+  assert.deepEqual(email.emailConfigNotices().length, 1, 'only the ignored personal reply address is reported');
+  assert.match(email.emailConfigNotices()[0], /EMAIL_REPLY_TO is not on the sender's domain/);
+});
+
+// ---------- Official sender, Reply-To and template design ----------
+
+const PERSONAL = /ayindegeorge20|gmail\.com/i;
+
+async function sendAllWorkflows() {
+  sent = [];
+  await email.sendRegistrationEmails(agent);
+  await email.sendDecisionEmail(agent);
+  await email.sendDecisionEmail({ ...agent, status: 'rejected' });
+  console.info = realInfo;
+  return sent;
+}
+
+test('every workflow sends From and Reply-To APC Lagos <notifications@apclagos.org>', async () => {
+  const messages = await sendAllWorkflows();
+  assert.equal(messages.length, 4);
+  for (const m of messages) {
+    assert.deepEqual(m.from, OFFICIAL, m.subject);
+    assert.deepEqual(m.replyTo, OFFICIAL, m.subject);
+    assert.equal(m.sender, undefined);
+    assert.equal(m.envelope, undefined, 'SMTP envelope left to the transport');
+  }
+  assert.equal(messages[1].to, 'alerts@example.org', 'admin recipient kept separate from the sender');
+});
+
+test('no personal address appears anywhere in generated headers or content', async () => {
+  for (const m of await sendAllWorkflows()) {
+    assert.ok(!PERSONAL.test(JSON.stringify({ from: m.from, replyTo: m.replyTo, headers: m.headers })), `${m.subject}: headers`);
+    assert.ok(!PERSONAL.test(m.html) && !PERSONAL.test(m.text) && !PERSONAL.test(m.subject), `${m.subject}: content`);
+  }
+});
+
+test('callers cannot override the official sender or Reply-To', async () => {
+  await email.sendEmail({ to: 'ngozi@example.com', subject: 's', text: 't', html: 'h', from: 'Someone <ayindegeorge20@gmail.com>', replyTo: 'ayindegeorge20@gmail.com', sender: 'x@example.com' });
+  console.info = realInfo;
+  assert.deepEqual(sent[0].from, OFFICIAL);
+  assert.deepEqual(sent[0].replyTo, OFFICIAL);
+  assert.equal(sent[0].sender, undefined);
+});
+
+test('a Reply-To on the official domain is honoured; any other domain is ignored', () => {
+  console.info = realInfo;
+  assert.deepEqual(email.replyToFor({ ...env.smtp, replyTo: 'info@apclagos.org' }), { name: 'APC Lagos', address: 'info@apclagos.org' });
+  assert.deepEqual(email.replyToFor({ ...env.smtp, replyTo: 'ayindegeorge20@gmail.com' }), OFFICIAL);
+  assert.deepEqual(email.replyToFor({ ...env.smtp, replyTo: 'bad\r\nBcc: x@apclagos.org' }), OFFICIAL);
+});
+
+test('templates share one design with HTML and plain text, the official footer and verified assets', async () => {
+  for (const m of await sendAllWorkflows()) {
+    assert.match(m.subject, /^APC Lagos: /);
+    assert.match(m.html, /<meta name="viewport" content="width=device-width,initial-scale=1">/);
+    assert.match(m.html, /max-width:600px/, 'fluid layout capped at 600px');
+    assert.match(m.html, /@media only screen and \(max-width:620px\)/, 'mobile adjustments');
+    assert.match(m.html, /src="https:\/\/www\.apclagos\.org\/brand\/apc-logo\.jpg"/, 'logo from the official site');
+    assert.match(m.html, /notifications@apclagos\.org/);
+    assert.match(m.html, /www\.apclagos\.org/);
+    assert.ok(!/<[a-z][^>]*>/i.test(m.text), 'plain text has no markup');
+    assert.match(m.text, /notifications@apclagos\.org \| www\.apclagos\.org/);
+    for (const banned of [/\bNIN\b.*\d{11}/, /account number:/i, /\bVIN:/]) assert.ok(!banned.test(m.text), `no sensitive values: ${m.subject}`);
+  }
+});
+
+test('user-supplied values are escaped in HTML', async () => {
+  sent = [];
+  await email.sendRegistrationEmails({ ...agent, firstName: '<script>alert(1)</script>', pollingUnit: 'A & B "school"' });
+  console.info = realInfo;
+  const html = sent[0].html;
+  assert.ok(!html.includes('<script>alert(1)</script>'));
+  assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+  assert.ok(html.includes('A &amp; B &quot;school&quot;'));
 });
