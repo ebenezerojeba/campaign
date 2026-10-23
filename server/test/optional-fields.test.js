@@ -1,5 +1,5 @@
-// Date of birth, NIN and selfie are off by default (shared/agentForm.js).
-// This file switches them on to prove that path works before anyone enables it.
+// NIN and selfie are off by default (shared/agentForm.js). This file enables
+// them to prove those optional paths work before anyone turns them on.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';

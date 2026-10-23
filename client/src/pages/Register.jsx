@@ -13,7 +13,7 @@ import { RegistrationSuccess } from '../components/RegistrationSuccess.jsx';
 import { STEP_SCHEMAS, STEP_FIELDS } from '../../../shared/schemas.js';
 import { LGA_NAMES, STATE } from '../../../shared/lagos.js';
 import { STATE_NAMES, lgasOfState, stateLabel } from '../../../shared/nigeria.js';
-import { AGENT_CATEGORIES, labelFor } from '../../../shared/options.js';
+import { AGENT_CATEGORIES, REGISTRATION_CATEGORIES, labelFor } from '../../../shared/options.js';
 import { OPTIONAL_FIELDS, DOCUMENT_RULES, requiredDocuments } from '../../../shared/agentForm.js';
 import { privacyNotice } from '../content/site.js';
 import { get, post } from '../lib/api.js';
@@ -263,7 +263,7 @@ function StepRole({ errors, control, watch, setValue }) {
   return (
     <div className="grid gap-10">
       <Controller control={control} name="agentCategory" render={({ field }) => (
-        <ChoiceGroup legend="Agent category" hint="Choose the role you have been asked to serve in." type="radio" name="agentCategory" options={AGENT_CATEGORIES} value={field.value} onChange={field.onChange} error={errors.agentCategory?.message} />
+        <ChoiceGroup legend="Agent category" hint="Choose the role you have been asked to serve in." type="radio" name="agentCategory" options={REGISTRATION_CATEGORIES} value={field.value} onChange={field.onChange} error={errors.agentCategory?.message} />
       )} />
 
       <FieldGroup title="Your polling unit" description="Choose from the official INEC list for Lagos State.">

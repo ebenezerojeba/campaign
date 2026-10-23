@@ -10,7 +10,7 @@ mongoose.set('strictQuery', true);
 // function instance is warm, so each request reuses one connection pool.
 const cache = globalThis.__apcMongo ?? (globalThis.__apcMongo = { conn: null, promise: null, uri: null });
 
-let resolvedUri = env.mongoUri;
+let resolvedUri = env.mongoUri ?? cache.uri;
 
 export function setMongoUri(uri) {
   resolvedUri = uri;

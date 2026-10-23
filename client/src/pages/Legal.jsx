@@ -14,7 +14,7 @@ function Section({ title, children }) {
 
 function Privacy() {
   const { contact } = useConfig();
-  const extra = [OPTIONAL_FIELDS.dateOfBirth && 'date of birth', OPTIONAL_FIELDS.nin && 'National Identification Number (NIN)', OPTIONAL_FIELDS.selfie && 'a selfie'].filter(Boolean);
+  const extra = [OPTIONAL_FIELDS.nin && 'National Identification Number (NIN)', OPTIONAL_FIELDS.selfie && 'a selfie'].filter(Boolean);
   return (
     <>
       <h1 className="type-h2 text-forest-900">Privacy notice</h1>
@@ -22,12 +22,12 @@ function Privacy() {
       <p className="type-lead mt-6 text-slate-600">This notice explains how APC Lagos Polling Unit Agent Registration handles the personal information you give us, in line with the Nigeria Data Protection Act 2023 (NDPA).</p>
 
       <Section title="What we collect">
-        <p>Your name, email address, phone number, state and LGA of origin{extra.length ? `, ${extra.join(', ')}` : ''}, your agent category, and the LGA, ward and polling unit you will serve, with its INEC code and senatorial district.</p>
+        <p>Your name, email address, phone number{OPTIONAL_FIELDS.dateOfBirth ? ', date of birth' : ''}, state and LGA of origin{extra.length ? `, ${extra.join(', ')}` : ''}, your agent category, and the LGA, ward and polling unit you will serve, with its INEC code and senatorial district.</p>
         <p>We also collect a passport photograph and a photo or scan of your Permanent Voter Card (PVC){OPTIONAL_FIELDS.selfie ? ' and a selfie' : ''}. These are sensitive: they identify you and show your voter registration details.</p>
         <p>We do not ask for bank details, your home address, location from your device, or information about your religion or ethnicity. Photo location data (GPS) is removed from JPEG images when they are uploaded.</p>
       </Section>
       <Section title="Why we use it, and on what basis">
-        <p>To register you as a polling unit agent, verify that you are a registered voter at the polling unit you will serve, contact you about your registration, and coordinate agents per polling unit. We rely on your explicit consent, which you give when you submit the form. You can withdraw it at any time.</p>
+        <p>To register you as a polling unit agent, confirm that you meet the minimum age requirement, verify that you are a registered voter at the polling unit you will serve, contact you about your registration, and coordinate agents per polling unit. We rely on your explicit consent, which you give when you submit the form. You can withdraw it at any time.</p>
       </Section>
       <Section title="How your documents are checked">
         <p>When you upload a file, the system checks its format and content: that it really is a JPG, PNG, WebP or PDF file (not just named like one), that it is complete and of a usable size, and that a PDF contains no scripts or attachments. These checks do not prove that a voter’s card is authentic. Authorised staff review cards separately.</p>

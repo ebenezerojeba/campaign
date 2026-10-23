@@ -13,6 +13,7 @@ process.env.DEMO_MODE = '';
 const { MongoMemoryServer } = await import('mongodb-memory-server-core');
 const mongoose = (await import('mongoose')).default;
 const request = (await import('supertest')).default;
+const { roleSchema } = await import('../../shared/schemas.js');
 
 let mongo;
 let app;
@@ -56,7 +57,7 @@ const pvcImage = (shade = 90) => png(1000, 640, { shade });
 const valid = {
   firstName: 'Ngozi', middleName: '', lastName: 'Okafor', email: 'ngozi@example.com', phone: '0803 123 4567',
   stateOfOrigin: 'Anambra', lgaOfOrigin: 'Onitsha North',
-  agentCategory: 'pu_agent', state: 'Lagos', lga: 'Surulere', wardCode: '20-01', pollingUnitCode: '24-20-01-001',
+  dateOfBirth: '1990-05-17', agentCategory: 'pu_agent', state: 'Lagos', lga: 'Surulere', wardCode: '20-01', pollingUnitCode: '24-20-01-001',
   ageConfirmed: true, declarationAccurate: true, consentProcessing: true, consentSensitive: true,
 };
 
@@ -109,6 +110,7 @@ describe('agent registration', () => {
     reference = res.body.data.reference;
     const saved = await Agent.findOne({ reference }).lean();
     assert.equal(saved.phone, '+2348031234567');
+    assert.equal(saved.dateOfBirth, '1990-05-17');
     assert.equal(saved.agentCategory, 'pu_agent');
     assert.equal(saved.stateOfOrigin, 'Anambra');
     // Names come from the official data, never from the browser.
@@ -142,6 +144,21 @@ describe('agent registration', () => {
     const res = await submit({ ...valid, phone: '08091110002', email: 'a2@example.com', agentCategory: 'volunteer' });
     assert.equal(res.status, 422);
     assert.ok(fieldsOf(res).agentCategory);
+  });
+
+  test('requires date of birth and offers Agent 1 and Agent 2 instead of Agent', async () => {
+    const missingDob = await submit({ ...valid, phone: '08091110008', email: 'a8@example.com', dateOfBirth: undefined });
+    assert.equal(missingDob.status, 422);
+    assert.match(fieldsOf(missingDob).dateOfBirth, /date of birth/i);
+
+    const legacyAgent = await submit({ ...valid, phone: '08091110009', email: 'a9@example.com', agentCategory: 'agent' });
+    assert.equal(legacyAgent.status, 422);
+    assert.ok(fieldsOf(legacyAgent).agentCategory);
+
+    for (const category of ['agent_1', 'agent_2']) {
+      assert.equal(roleSchema.safeParse({ agentCategory: category, state: 'Lagos', lga: 'Surulere' }).success, true);
+    }
+    assert.equal(roleSchema.safeParse({ agentCategory: 'agent', state: 'Lagos', lga: 'Surulere' }).success, false);
   });
 
   test('rejects an LGA of origin from a different state', async () => {

@@ -41,9 +41,9 @@ Responses are `{ ok: true, data, meta? }` or `{ ok: false, error: { code, messag
 
 ## The registration form
 
-- **Required**: first and last name (middle name optional), email (validated in the browser and on the server), Nigerian mobile number, state and LGA of origin (from `pollingunit/nigeria-states-lgas.json`), agent category (Agent, Canvasser, Mobilizer, PU Agent), LGA, ward and polling unit (official INEC data), passport photograph and voter’s card.
+- **Required**: first and last name (middle name optional), date of birth (18+), email (validated in the browser and on the server), Nigerian mobile number, state and LGA of origin (from `pollingunit/nigeria-states-lgas.json`), agent category (Agent 1, Agent 2, Canvasser, Mobilizer, PU Agent), LGA, ward and polling unit (official INEC data), passport photograph and voter’s card.
 - **Delimitation**: the INEC polling unit code (e.g. `24-20-01-001`) and senatorial district are filled in from the official data, never typed.
-- **Switched off until approved**: date of birth, NIN and selfie. Turn them on in `shared/agentForm.js` only after the data protection lead confirms they are authorised and necessary, and update the privacy notice. NIN also needs `DATA_ENCRYPTION_KEY`; it is stored encrypted (AES-256-GCM), with a keyed hash to catch duplicates, and revealing it is audit-logged. `server/test/optional-fields.test.js` covers this path.
+- **Optional sensitive fields**: NIN and selfie remain switched off. Turn them on in `shared/agentForm.js` only after the data protection lead confirms they are authorised and necessary, and update the privacy notice. NIN also needs `DATA_ENCRYPTION_KEY`; it is stored encrypted (AES-256-GCM), with a keyed hash to catch duplicates, and revealing it is audit-logged. `server/test/optional-fields.test.js` covers this path.
 - **LCDA** has been removed, pending confirmation that it is required.
 
 ### Document checks

@@ -1,14 +1,14 @@
 import { useId, useState } from 'react';
 import { Link } from 'react-router';
 import { m, AnimatePresence } from 'framer-motion';
-import { Mail, MapPin, Camera, IdCard, Plus, Minus, ArrowRight, Lock, EyeOff, FileCheck2, Trash2 } from 'lucide-react';
+import { Mail, MapPin, Camera, IdCard, CalendarDays, Plus, Minus, ArrowRight, Lock, EyeOff, FileCheck2, Trash2 } from 'lucide-react';
 import { AdireTile } from '../components/brand/Adire.jsx';
 import { ButtonLink } from '../components/ui/Button.jsx';
 import { site } from '../content/site.js';
 import { useConfig } from '../lib/config.jsx';
 import { cx } from '../lib/format.js';
 
-const ICONS = { Mail, MapPin, Camera, IdCard };
+const ICONS = { Mail, MapPin, Camera, IdCard, CalendarDays };
 const ease = [0.22, 1, 0.36, 1];
 
 // 3 columns × 4 rows of cloth on large screens.

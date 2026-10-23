@@ -7,7 +7,7 @@
 // collect only what the purpose needs). Update the privacy notice at the same
 // time. NIN additionally needs DATA_ENCRYPTION_KEY set on the server.
 export const OPTIONAL_FIELDS = {
-  dateOfBirth: false,
+  dateOfBirth: true,
   nin: false,
   selfie: false,
 };

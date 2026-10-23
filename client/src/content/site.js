@@ -30,6 +30,7 @@ export const site = {
 
   requirements: [
     { icon: 'Mail', title: 'Email and phone number', body: 'Your confirmation and decision are sent by email, so use an address you can open.' },
+    { icon: 'CalendarDays', title: 'Date of birth', body: 'You must be at least 18 years old to register.' },
     { icon: 'MapPin', title: 'Your polling unit', body: 'Choose your LGA, ward and polling unit from the official INEC list for Lagos State.' },
     { icon: 'Camera', title: 'A passport photograph', body: 'A clear, recent head-and-shoulders photo on a plain background. JPG, PNG or WebP.' },
     { icon: 'IdCard', title: 'Your voter’s card (PVC)', body: 'A sharp photo of the front of your PVC with every detail readable, or a PDF scan.' },
@@ -42,8 +43,8 @@ export const site = {
   ],
 
   faq: [
-    { q: 'Who can register?', a: 'Anyone aged 18 or over with a valid voter’s card who will serve at a polling unit in Lagos State.' },
-    { q: 'Which categories can I register for?', a: 'Agent, Canvasser, Mobilizer or PU Agent. Choose the one you have been asked to serve as. The team may confirm or change it when reviewing your registration.' },
+    { q: 'Who can register?', a: 'Anyone aged 18 or over with a valid voter’s card who will serve at a polling unit in Lagos State. You will be asked for your date of birth to confirm your age.' },
+    { q: 'Which categories can I register for?', a: 'Agent 1, Agent 2, Canvasser, Mobilizer or PU Agent. Choose the one you have been asked to serve as. The team may confirm or change it when reviewing your registration.' },
     { q: 'Why do you need my voter’s card?', a: 'To confirm that you are a registered voter and to match you to your polling unit. Only authorised staff can see it.' },
     { q: 'Does the upload check prove my card is genuine?', a: 'No. The system checks that each file is a real, complete image or PDF of a sensible size, and rejects files that are not. Staff then check the card itself. A file passing the upload checks does not mean the card has been verified.' },
     { q: 'What if my photo is rejected?', a: 'The form tells you why: for example, the file is not a photo, is too small, or is not a portrait. Take a new photo in good light with the whole card or your face in frame, and try again.' },
@@ -53,9 +54,9 @@ export const site = {
 };
 
 export const privacyNotice = {
-  version: '2026-10-agents',
+  version: '2026-10-agents-v2',
   summary: [
-    'We use your details, passport photograph and voter’s card only to register and verify you as a polling unit agent and to contact you about it.',
+    'We collect your date of birth to confirm you meet the age requirement, and use your details, passport photograph and voter’s card to register and verify you as a polling unit agent and contact you about it.',
     'Your documents are stored securely. Only authorised registration staff can open them, and every view is logged.',
     'Upload checks confirm each file is a genuine image or PDF. They do not prove your voter’s card is authentic: staff check that separately.',
     'We keep your registration for the election period it was collected for and up to 12 months after, then delete it and your documents.',

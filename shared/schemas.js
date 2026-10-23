@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { STATE, LGA_NAMES } from './lagos.js';
 import { STATE_NAMES, isValidStateLga } from './nigeria.js';
-import { AGENT_CATEGORIES, valuesOf } from './options.js';
+import { REGISTRATION_CATEGORIES, valuesOf } from './options.js';
 import { OPTIONAL_FIELDS } from './agentForm.js';
 
 const NAME_RE = /^[\p{L}][\p{L}\p{M}' .-]*$/u;
@@ -72,7 +72,7 @@ export const personalSchema = z.object({
 });
 
 export const roleSchema = z.object({
-  agentCategory: z.enum(valuesOf(AGENT_CATEGORIES), { errorMap: () => ({ message: 'Choose your agent category' }) }),
+  agentCategory: z.enum(valuesOf(REGISTRATION_CATEGORIES), { errorMap: () => ({ message: 'Choose your agent category' }) }),
   state: z.literal(STATE, { errorMap: () => ({ message: 'Registration is for polling units in Lagos State' }) }),
   lga: z.enum(LGA_NAMES, { errorMap: () => ({ message: 'Choose your Local Government Area' }) }),
   // Chosen by INEC code. The server checks both against the official dataset
