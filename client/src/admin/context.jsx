@@ -17,7 +17,7 @@ export function useAdminApiFactory(demo, demoGet) {
           await new Promise((r) => setTimeout(r, 180));
           return demoGet(`/admin${path}`);
         },
-        post: PREVIEW_BLOCKED, patch: PREVIEW_BLOCKED, put: PREVIEW_BLOCKED, del: PREVIEW_BLOCKED, upload: PREVIEW_BLOCKED,
+        post: PREVIEW_BLOCKED, patch: PREVIEW_BLOCKED, put: PREVIEW_BLOCKED, del: PREVIEW_BLOCKED,
       };
     }
     return {
@@ -25,8 +25,7 @@ export function useAdminApiFactory(demo, demoGet) {
       post: (path, body) => api(`/admin${path}`, { method: 'POST', body }),
       patch: (path, body) => api(`/admin${path}`, { method: 'PATCH', body }),
       put: (path, body) => api(`/admin${path}`, { method: 'PUT', body }),
-      del: (path) => api(`/admin${path}`, { method: 'DELETE' }),
-      upload: (path, formData) => api(`/admin${path}`, { method: 'POST', body: formData }),
+      del: (path, body) => api(`/admin${path}`, { method: 'DELETE', body }),
     };
   }, [demo, demoGet]);
 }

@@ -1,8 +1,8 @@
 {
-  "name": "apc-lagos-volunteers",
+  "name": "apcagent",
   "version": "1.0.0",
   "private": true,
-  "description": "APC Lagos Volunteer Programme: registration, volunteer portal and administration platform",
+  "description": "APC Lagos Polling Unit Agent Registration: agent registration with document upload and administration",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -33,7 +33,6 @@
   "dependencies": {
     "@hookform/resolvers": "^5.9.2",
     "bcryptjs": "^3.0.3",
-    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^18.0.9",

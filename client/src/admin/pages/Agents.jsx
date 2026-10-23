@@ -11,21 +11,21 @@ import { buttonClass } from '../../components/ui/Button.jsx';
 import { formatDate, formatPhone, cx } from '../../lib/format.js';
 import { LGA_NAMES, STATE } from '../../../../shared/lagos.js';
 import { STATE_NAMES, lgasOfState, stateLabel } from '../../../../shared/nigeria.js';
-import { AGENT_TYPES, INTERESTS, VOLUNTEER_STATUSES, labelFor } from '../../../../shared/options.js';
+import { AGENT_CATEGORIES, REGISTRATION_STATUSES, labelFor } from '../../../../shared/options.js';
 
-const FILTER_KEYS = ['q', 'status', 'agentType', 'lga', 'wardCode', 'pollingUnitCode', 'senatorialDistrict', 'stateOfOrigin', 'lgaOfOrigin', 'interest', 'from', 'to', 'sample', 'sort'];
+const FILTER_KEYS = ['q', 'status', 'agentCategory', 'lga', 'wardCode', 'pollingUnitCode', 'senatorialDistrict', 'stateOfOrigin', 'lgaOfOrigin', 'from', 'to', 'sample', 'sort'];
 
 // Changing a parent filter clears the filters that depend on it.
 const DEPENDENTS = { lga: ['wardCode', 'pollingUnitCode'], wardCode: ['pollingUnitCode'], stateOfOrigin: ['lgaOfOrigin'] };
-const selectCls = 'h-10 rounded-[10px] border border-line-strong bg-white px-3 text-sm text-ink focus:border-forest-900 focus:outline-none focus:ring-3 focus:ring-gold-500/45';
+const selectCls = 'h-10 rounded-[10px] border border-line-strong bg-white px-3 text-sm text-ink focus:border-forest-900 focus:outline-none focus:ring-3 focus:ring-gold-500/45 disabled:bg-mist disabled:text-slate-400';
 
-export default function Volunteers() {
+export default function Agents() {
   const { api, base, user, demo } = useAdmin();
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState(params.get('q') ?? '');
   const query = params.toString();
 
-  const { data, meta, loading, error, reload } = useFetch((signal) => api.get(`/volunteers?${query}`, { signal }), query);
+  const { data, meta, loading, error, reload } = useFetch((signal) => api.get(`/agents?${query}`, { signal }), query);
   const config = useConfig();
   const lga = params.get('lga') ?? '';
   const wardCode = params.get('wardCode') ?? '';
@@ -58,12 +58,12 @@ export default function Volunteers() {
   return (
     <>
       <PageHeader
-        title="Volunteers"
-        description="Search, filter and review applications."
-        actions={can(user, 'volunteers:export') && (
+        title="Registrations"
+        description="Search, filter and review polling unit agent registrations."
+        actions={can(user, 'agents:export') && (
           demo
             ? <span className={buttonClass({ variant: 'secondary', className: 'opacity-55' })} aria-disabled="true"><Download className="size-4" aria-hidden />Export CSV</span>
-            : <a href={`/api/admin/exports/volunteers?${exportQuery}`} className={buttonClass({ variant: 'secondary' })} download><Download className="size-4" aria-hidden />Export CSV</a>
+            : <a href={`/api/admin/exports/agents?${exportQuery}`} className={buttonClass({ variant: 'secondary' })} download><Download className="size-4" aria-hidden />Export CSV</a>
         )}
       />
 
@@ -71,22 +71,21 @@ export default function Volunteers() {
         <div className="flex flex-col gap-3 border-b border-line p-4">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
-            <label htmlFor="vol-search" className="sr-only">Search volunteers</label>
-            <input id="vol-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by reference, name, phone, email or polling unit code" className="h-11 w-full rounded-[10px] border border-line-strong bg-white pl-9 pr-3 text-[15px] focus:border-forest-900 focus:outline-none focus:ring-3 focus:ring-gold-500/45" />
+            <label htmlFor="agent-search" className="sr-only">Search registrations</label>
+            <input id="agent-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by reference, name, phone, email or polling unit code" className="h-11 w-full rounded-[10px] border border-line-strong bg-white pl-9 pr-3 text-[15px] focus:border-forest-900 focus:outline-none focus:ring-3 focus:ring-gold-500/45" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="sr-only" htmlFor="f-status">Status</label>
             <select id="f-status" className={selectCls} value={params.get('status') ?? ''} onChange={(e) => update({ status: e.target.value })}>
               <option value="">All statuses</option>
-              {VOLUNTEER_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              {REGISTRATION_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
-            <label className="sr-only" htmlFor="f-agent">Agent type</label>
-            <select id="f-agent" className={selectCls} value={params.get('agentType') ?? ''} onChange={(e) => update({ agentType: e.target.value })}>
-              <option value="">All agent types</option>
-              {AGENT_TYPES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
-              <option value="none">Not recorded</option>
+            <label className="sr-only" htmlFor="f-category">Agent category</label>
+            <select id="f-category" className={selectCls} value={params.get('agentCategory') ?? ''} onChange={(e) => update({ agentCategory: e.target.value })}>
+              <option value="">All categories</option>
+              {AGENT_CATEGORIES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
             </select>
-            <label className="sr-only" htmlFor="f-lga">LGA of residence</label>
+            <label className="sr-only" htmlFor="f-lga">LGA</label>
             <select id="f-lga" className={selectCls} value={lga} onChange={(e) => update({ lga: e.target.value })}>
               <option value="">All LGAs</option>
               {LGA_NAMES.map((l) => <option key={l} value={l}>{l}</option>)}
@@ -115,11 +114,6 @@ export default function Volunteers() {
             <select id="f-origin-lga" className={selectCls} value={params.get('lgaOfOrigin') ?? ''} disabled={!stateOfOrigin} onChange={(e) => update({ lgaOfOrigin: e.target.value })}>
               <option value="">{stateOfOrigin ? 'All LGAs of origin' : 'Choose a state of origin'}</option>
               {lgasOfState(stateOfOrigin).map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
-            <label className="sr-only" htmlFor="f-interest">Interest</label>
-            <select id="f-interest" className={selectCls} value={params.get('interest') ?? ''} onChange={(e) => update({ interest: e.target.value })}>
-              <option value="">All interests</option>
-              {INTERESTS.map((i) => <option key={i.value} value={i.value}>{i.label}</option>)}
             </select>
             <span className="flex items-center gap-1.5 text-sm text-slate-500">
               <label htmlFor="f-from">From</label>
@@ -153,31 +147,35 @@ export default function Volunteers() {
           <div className="space-y-2 p-4">{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-12" />)}</div>
         ) : data.length === 0 ? (
           <div className="p-4">
-            <EmptyState icon={Users} title={active ? 'No volunteers match these filters' : 'No registrations yet'}>
-              {active ? 'Try removing a filter or searching for something else.' : 'Applications will appear here as people register.'}
+            <EmptyState icon={Users} title={active ? 'No registrations match these filters' : 'No registrations yet'}>
+              {active ? 'Try removing a filter or searching for something else.' : 'Registrations will appear here as agents register.'}
             </EmptyState>
           </div>
         ) : (
           <div className={cx('overflow-x-auto transition-opacity', loading && 'opacity-60')} aria-busy={loading}>
-            <table className="w-full min-w-[1020px]">
-              <caption className="sr-only">Volunteer applications</caption>
+            <table className="w-full min-w-[1080px]">
+              <caption className="sr-only">Polling unit agent registrations</caption>
               <thead className="border-b border-line bg-paper">
-                <tr><th scope="col" className={th}>Reference</th><th scope="col" className={th}>Name</th><th scope="col" className={th}>Phone</th><th scope="col" className={th}>Agent type</th><th scope="col" className={th}>LGA</th><th scope="col" className={th}>Ward</th><th scope="col" className={th}>Interests</th><th scope="col" className={th}>Status</th><th scope="col" className={th}>Registered</th></tr>
+                <tr>
+                  <th scope="col" className={th}>Reference</th><th scope="col" className={th}>Name</th><th scope="col" className={th}>Category</th>
+                  <th scope="col" className={th}>Phone</th><th scope="col" className={th}>LGA</th><th scope="col" className={th}>Ward</th>
+                  <th scope="col" className={th}>Polling unit</th><th scope="col" className={th}>Status</th><th scope="col" className={th}>Registered</th>
+                </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {data.map((v) => (
-                  <tr key={v._id} className="group relative hover:bg-paper">
+                {data.map((a) => (
+                  <tr key={a._id} className="group relative hover:bg-paper">
                     <td className={td}>
-                      <Link to={`${base}/volunteers/${v._id}`} className="font-mono text-[13px] font-semibold text-forest-900 after:absolute after:inset-0 hover:underline">{v.reference}</Link>
+                      <Link to={`${base}/agents/${a._id}`} className="font-mono text-[13px] font-semibold text-forest-900 after:absolute after:inset-0 hover:underline">{a.reference}</Link>
                     </td>
-                    <td className={td}><span className="flex items-center gap-2 font-medium">{v.firstName} {v.lastName}{v.isSample && <SampleBadge />}</span></td>
-                    <td className={`${td} whitespace-nowrap text-slate-600 tabular`}>{formatPhone(v.phone)}</td>
-                    <td className={`${td} whitespace-nowrap`}>{v.agentType ? labelFor(AGENT_TYPES, v.agentType) : <span className="text-slate-400">Not recorded</span>}</td>
-                    <td className={td}>{v.lga}</td>
-                    <td className={`${td} max-w-[180px] truncate text-slate-600`} title={v.ward}>{v.ward ?? <span className="text-slate-400">–</span>}</td>
-                    <td className={`${td} max-w-[220px] truncate text-slate-600`}>{v.interests.map((i) => labelFor(INTERESTS, i)).join(', ')}</td>
-                    <td className={td}><StatusBadge status={v.status} /></td>
-                    <td className={`${td} whitespace-nowrap text-slate-500`}>{formatDate(v.createdAt)}</td>
+                    <td className={td}><span className="flex items-center gap-2 font-medium">{a.firstName} {a.lastName}{a.isSample && <SampleBadge />}</span></td>
+                    <td className={`${td} whitespace-nowrap`}>{labelFor(AGENT_CATEGORIES, a.agentCategory)}</td>
+                    <td className={`${td} whitespace-nowrap text-slate-600 tabular`}>{formatPhone(a.phone)}</td>
+                    <td className={td}>{a.lga}</td>
+                    <td className={`${td} max-w-[160px] truncate text-slate-600`} title={a.ward}>{a.ward ?? '–'}</td>
+                    <td className={`${td} max-w-[200px] truncate text-slate-600`} title={a.pollingUnit ? `${a.pollingUnit} (${a.pollingUnitCode})` : undefined}>{a.pollingUnitCode ?? '–'}</td>
+                    <td className={td}><StatusBadge status={a.status} /></td>
+                    <td className={`${td} whitespace-nowrap text-slate-500`}>{formatDate(a.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

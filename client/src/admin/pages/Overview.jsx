@@ -1,11 +1,12 @@
 import { Link } from 'react-router';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Users, Hourglass, CircleCheck, CircleX, Compass, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Users, Hourglass, CircleCheck, CircleX, ArrowRight, Download } from 'lucide-react';
 import { useAdmin } from '../context.jsx';
 import { useFetch } from '../../lib/useFetch.js';
 import { PageHeader, Card, StatTile, BarList, th, td } from '../ui.jsx';
 import { Badge, StatusBadge, SampleBadge, Skeleton, ErrorState, EmptyState } from '../../components/ui/Feedback.jsx';
 import { formatShortDate, relativeTime, formatNumber } from '../../lib/format.js';
+import { AGENT_CATEGORIES, labelFor } from '../../../../shared/options.js';
 
 function TrendTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
@@ -21,7 +22,7 @@ function TrendTooltip({ active, payload }) {
 function Trend({ data }) {
   const total = data.reduce((t, d) => t + d.registrations, 0);
   return (
-    <Card title="Registrations, last 30 days" description={`${formatNumber(total)} new applications`} className="lg:col-span-2" bodyClassName="p-3 pt-5 sm:p-5">
+    <Card title="Registrations, last 30 days" description={`${formatNumber(total)} new registrations`} className="lg:col-span-2" bodyClassName="p-3 pt-5 sm:p-5">
       <div className="h-64" role="img" aria-label={`Line chart of daily registrations over the last 30 days, ${total} in total.`}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
@@ -63,20 +64,20 @@ export default function Overview() {
     <>
       <PageHeader
         title={`Welcome, ${user.name.split(' ')[0]}`}
-        description="Registrations and activity across the programme."
+        description="Polling unit agent registrations across Lagos State."
         actions={data.sampleCount > 0 && <Badge tone="sample">{formatNumber(data.sampleCount)} sample records included</Badge>}
       />
 
       {totals.all === 0 ? (
         <EmptyState icon={Users} title="No registrations yet" action={<a href="/register" target="_blank" className="font-semibold text-green-700 underline underline-offset-4">Open the registration form</a>}>
-          When volunteers register, their applications appear here for review.
+          When agents register, their registrations appear here for review.
         </EmptyState>
       ) : (
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile label="Total registrations" value={totals.all} icon={Users} />
             <StatTile label="Pending review" value={totals.pending} icon={Hourglass} tone="pending" />
-            <StatTile label="Approved" value={totals.approved} icon={CircleCheck} tone="approved" hint={totals.all ? `${Math.round((totals.approved / totals.all) * 100)}% of all applications` : undefined} />
+            <StatTile label="Approved" value={totals.approved} icon={CircleCheck} tone="approved" hint={totals.all ? `${Math.round((totals.approved / totals.all) * 100)}% of all registrations` : undefined} />
             <StatTile label="Not approved" value={totals.rejected} icon={CircleX} tone="rejected" />
           </div>
 
@@ -85,21 +86,15 @@ export default function Overview() {
             <Card title="Needs attention">
               <ul className="space-y-3">
                 <li>
-                  <Link to={`${base}/volunteers?status=pending`} className="flex items-center justify-between gap-3 rounded-xl border border-line p-4 hover:border-forest-900">
-                    <span className="flex items-center gap-3"><Hourglass className="size-5 text-gold-600" aria-hidden /><span><span className="block font-semibold text-ink">{formatNumber(totals.pending)} pending applications</span><span className="text-sm text-slate-500">Review and decide</span></span></span>
+                  <Link to={`${base}/agents?status=pending`} className="flex items-center justify-between gap-3 rounded-xl border border-line p-4 hover:border-forest-900">
+                    <span className="flex items-center gap-3"><Hourglass className="size-5 text-gold-600" aria-hidden /><span><span className="block font-semibold text-ink">{formatNumber(totals.pending)} pending registrations</span><span className="text-sm text-slate-500">Check documents and decide</span></span></span>
                     <ArrowRight className="size-4 text-slate-400" aria-hidden />
                   </Link>
                 </li>
-                <li>
-                  <Link to={`${base}/opportunities`} className="flex items-center justify-between gap-3 rounded-xl border border-line p-4 hover:border-forest-900">
-                    <span className="flex items-center gap-3"><Compass className="size-5 text-green-700" aria-hidden /><span><span className="block font-semibold text-ink">{formatNumber(data.publishedOpportunities)} published opportunities</span><span className="text-sm text-slate-500">Manage activities</span></span></span>
-                    <ArrowRight className="size-4 text-slate-400" aria-hidden />
-                  </Link>
-                </li>
-                {user.permissions.includes('requests:manage') && (
+                {user.permissions.includes('agents:export') && (
                   <li>
-                    <Link to={`${base}/requests`} className="flex items-center justify-between gap-3 rounded-xl border border-line p-4 hover:border-forest-900">
-                      <span className="flex items-center gap-3"><ShieldCheck className="size-5 text-info-700" aria-hidden /><span><span className="block font-semibold text-ink">{formatNumber(data.openRequests)} open data requests</span><span className="text-sm text-slate-500">Corrections, exports and deletions</span></span></span>
+                    <Link to={`${base}/agents?status=approved`} className="flex items-center justify-between gap-3 rounded-xl border border-line p-4 hover:border-forest-900">
+                      <span className="flex items-center gap-3"><Download className="size-5 text-green-700" aria-hidden /><span><span className="block font-semibold text-ink">{formatNumber(totals.approved)} approved agents</span><span className="text-sm text-slate-500">Filter by polling unit and export</span></span></span>
                       <ArrowRight className="size-4 text-slate-400" aria-hidden />
                     </Link>
                   </li>
@@ -118,20 +113,21 @@ export default function Overview() {
                 </details>
               )}
             </Card>
-            <Card title="Areas of interest" description="Volunteers can choose more than one">
-              <BarList items={data.byInterest.map((i) => ({ label: i.label, value: i.count }))} />
+            <Card title="Registrations by agent category">
+              <BarList items={data.byCategory.map((c) => ({ label: c.label, value: c.count }))} />
             </Card>
           </div>
 
-          <Card title="Recent registrations" actions={<Link to={`${base}/volunteers`} className="text-sm font-semibold text-green-700 hover:underline">View all</Link>} bodyClassName="p-0">
+          <Card title="Recent registrations" actions={<Link to={`${base}/agents`} className="text-sm font-semibold text-green-700 hover:underline">View all</Link>} bodyClassName="p-0">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px]">
-                <thead className="border-b border-line bg-paper"><tr><th className={th}>Reference</th><th className={th}>Name</th><th className={th}>LGA</th><th className={th}>Status</th><th className={th}>Registered</th></tr></thead>
+                <thead className="border-b border-line bg-paper"><tr><th className={th}>Reference</th><th className={th}>Name</th><th className={th}>Category</th><th className={th}>LGA</th><th className={th}>Status</th><th className={th}>Registered</th></tr></thead>
                 <tbody className="divide-y divide-line">
                   {data.recent.map((v) => (
                     <tr key={v._id} className="hover:bg-paper">
-                      <td className={td}><Link to={`${base}/volunteers/${v._id}`} className="font-mono text-[13px] font-semibold text-forest-900 hover:underline">{v.reference}</Link></td>
+                      <td className={td}><Link to={`${base}/agents/${v._id}`} className="font-mono text-[13px] font-semibold text-forest-900 hover:underline">{v.reference}</Link></td>
                       <td className={td}><span className="flex items-center gap-2">{v.firstName} {v.lastName}{v.isSample && <SampleBadge />}</span></td>
+                      <td className={td}>{labelFor(AGENT_CATEGORIES, v.agentCategory)}</td>
                       <td className={td}>{v.lga}</td>
                       <td className={td}><StatusBadge status={v.status} /></td>
                       <td className={`${td} text-slate-500`}>{relativeTime(v.createdAt)}</td>

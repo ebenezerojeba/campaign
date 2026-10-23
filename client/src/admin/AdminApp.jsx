@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, Navigate, NavLink, Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { AnimatePresence, m } from 'framer-motion';
-import { LayoutDashboard, Users, Compass, Megaphone, ShieldCheck, ScrollText, UserCog, LogOut, Menu, X, Eye, ExternalLink } from 'lucide-react';
+import { LayoutDashboard, Users, ScrollText, UserCog, LogOut, Menu, X, Eye, ExternalLink } from 'lucide-react';
 import { Logo } from '../components/brand/Logo.jsx';
 import { Spinner } from '../components/ui/Feedback.jsx';
 import { api } from '../lib/api.js';
@@ -10,21 +10,14 @@ import { AdminContext, useAdminApiFactory, can, useAdmin } from './context.jsx';
 import Login from './pages/Login.jsx';
 
 const Overview = lazy(() => import('./pages/Overview.jsx'));
-const Volunteers = lazy(() => import('./pages/Volunteers.jsx'));
-const VolunteerDetail = lazy(() => import('./pages/VolunteerDetail.jsx'));
-const Opportunities = lazy(() => import('./pages/Opportunities.jsx'));
-const OpportunityEditor = lazy(() => import('./pages/OpportunityEditor.jsx'));
-const Announcements = lazy(() => import('./pages/Announcements.jsx'));
-const Requests = lazy(() => import('./pages/Requests.jsx'));
+const Agents = lazy(() => import('./pages/Agents.jsx'));
+const AgentDetail = lazy(() => import('./pages/AgentDetail.jsx'));
 const Audit = lazy(() => import('./pages/Audit.jsx'));
 const Staff = lazy(() => import('./pages/Staff.jsx'));
 
 const NAV = [
-  { to: '', label: 'Overview', icon: LayoutDashboard, permission: 'volunteers:read', end: true },
-  { to: 'volunteers', label: 'Volunteers', icon: Users, permission: 'volunteers:read' },
-  { to: 'opportunities', label: 'Opportunities', icon: Compass, permission: 'volunteers:read' },
-  { to: 'announcements', label: 'Announcements', icon: Megaphone, permission: 'announcements:manage' },
-  { to: 'requests', label: 'Data requests', icon: ShieldCheck, permission: 'requests:manage' },
+  { to: '', label: 'Overview', icon: LayoutDashboard, permission: 'agents:read', end: true },
+  { to: 'agents', label: 'Registrations', icon: Users, permission: 'agents:read' },
   { to: 'audit', label: 'Audit log', icon: ScrollText, permission: 'audit:read' },
   { to: 'staff', label: 'Staff accounts', icon: UserCog, permission: 'staff:manage' },
 ];
@@ -99,7 +92,7 @@ function Shell() {
         )}
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-line bg-white/90 px-4 backdrop-blur sm:px-6 lg:px-8">
           <button type="button" onClick={() => setOpen(true)} className="rounded-md p-2 text-forest-900 hover:bg-mist lg:hidden" aria-label="Open menu" aria-expanded={open}><Menu className="size-6" aria-hidden /></button>
-          <p className="hidden text-sm text-slate-500 lg:block">Volunteer programme administration</p>
+          <p className="hidden text-sm text-slate-500 lg:block">Polling unit agent registration administration</p>
           <Link to="/" target="_blank" className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold text-green-700 hover:bg-mist">View public site<ExternalLink className="size-3.5" aria-hidden /></Link>
         </header>
         <main id="admin-main" className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -120,13 +113,8 @@ function AdminRoutes() {
     <Routes>
       <Route element={<Shell />}>
         <Route index element={<Overview />} />
-        <Route path="volunteers" element={<Volunteers />} />
-        <Route path="volunteers/:id" element={<VolunteerDetail />} />
-        <Route path="opportunities" element={<Opportunities />} />
-        <Route path="opportunities/new" element={<Guard permission="opportunities:manage"><OpportunityEditor /></Guard>} />
-        <Route path="opportunities/:id" element={<OpportunityEditor />} />
-        <Route path="announcements" element={<Guard permission="announcements:manage"><Announcements /></Guard>} />
-        <Route path="requests" element={<Guard permission="requests:manage"><Requests /></Guard>} />
+        <Route path="agents" element={<Agents />} />
+        <Route path="agents/:id" element={<AgentDetail />} />
         <Route path="audit" element={<Guard permission="audit:read"><Audit /></Guard>} />
         <Route path="staff" element={<Guard permission="staff:manage"><Staff /></Guard>} />
         <Route path="*" element={<p className="text-slate-600">This page does not exist.</p>} />
@@ -193,12 +181,12 @@ function Preview() {
 
 export default function AdminApp() {
   useEffect(() => {
-    document.title = 'Administration · APC Lagos Volunteer Programme';
+    document.title = 'Administration · APC Lagos Polling Unit Agent Registration';
     const meta = document.createElement('meta');
     meta.name = 'robots';
     meta.content = 'noindex, nofollow';
     document.head.appendChild(meta);
-    return () => { meta.remove(); document.title = 'APC Lagos Volunteer Programme'; };
+    return () => { meta.remove(); document.title = 'APC Lagos Polling Unit Agent Registration'; };
   }, []);
   return (
     <Routes>
