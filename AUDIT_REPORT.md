@@ -321,3 +321,19 @@ The success page shows the green notice only when the status is `sent`, which me
 2. **Check Gmail now:** look in **Sent** and **All Mail** of `ayindegeorge20@gmail.com` for the admin alerts and for the test message "APC Lagos registration email test (Nodemailer)". Ask the applicant of `LAG-36GH-EF2E` to check spam.
 3. **Hostinger delivery logs:** after switching, use the logs in hPanel to confirm delivery or bounces for any message, by time and recipient domain. Every attempt has a matching correlation ID on the admin page and in the Vercel function logs.
 4. **Admin password:** the exposed admin password is **still active**. The owner chose to deploy anyway. Change it (section 16).
+
+### Update: production switched to Hostinger (05:25 UTC)
+
+| Step | Result |
+|---|---|
+| New mailbox password for `notifications@apclagos.org` | `verify()` **passed** on `smtp.hostinger.com:465` (SSL). The `535` failures were caused by the earlier password. |
+| Vercel production and preview | `SMTP_HOST=smtp.hostinger.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER=notifications@apclagos.org`, `SMTP_PASS` (set, not shown), `EMAIL_FROM=notifications@apclagos.org`, `EMAIL_FROM_NAME=APC Lagos`. `ADMIN_NOTIFICATION_EMAIL` unchanged (`ayindegeorge20@gmail.com`), so admin alerts are no longer self-sends. |
+| One authorised test to `ayindegeorge20@gmail.com` through the app's email code | **Accepted by Hostinger**: `250 2.0.0 Ok: queued as 4j9s0N0QGbz3y4p`, 1 accepted, 0 rejected, correlation ID `acb66928-895d-4b56-8a2c-df849831cc6b`. Inbox receipt **to be confirmed by the owner**. |
+| Production deployment | `apcagent-aia2n18gx` (redeploy of `3824bf8` with the new settings), Ready, serving www.apclagos.org; `/api/health` reports `email: configured` |
+
+Still to do:
+
+- Confirm the test message is in the inbox (or spam) of `ayindegeorge20@gmail.com`. If it is not there, look up queue ID `4j9s0N0QGbz3y4p` in Hostinger's email logs.
+- Run one real test registration with an inbox you control, check both emails arrive, then delete the record from the admin page.
+- Once mail is confirmed arriving, consider tightening DMARC from `p=none` to `p=quarantine`.
+- The local `.env` still holds the Gmail settings. It was deliberately left unedited.
