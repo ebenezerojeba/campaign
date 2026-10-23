@@ -337,3 +337,56 @@ Still to do:
 - Run one real test registration with an inbox you control, check both emails arrive, then delete the record from the admin page.
 - Once mail is confirmed arriving, consider tightening DMARC from `p=none` to `p=quarantine`.
 - The local `.env` still holds the Gmail settings. It was deliberately left unedited.
+
+## 18. Official sender, Reply-To and email redesign (23 October 2026, 05:40 UTC)
+
+**Source of the Gmail reply address:** the local `.env` sets `EMAIL_REPLY_TO`, `SMTP_USER`, `MAIL_FROM` and `ADMIN_NOTIFICATION_EMAIL` to the personal Gmail address. Two things put it in front of recipients:
+
+- The Hostinger test messages sent from this workstation loaded that `EMAIL_REPLY_TO`, so they carried `Reply-To: ayindegeorge20@gmail.com`.
+- Before 05:25 UTC, production sent *from* the Gmail account, so replies went there too.
+
+Production has no `EMAIL_REPLY_TO` variable.
+
+**Fix (`server/src/services/email.js`):**
+
+- Every message is sent with `from` and `replyTo` both set to `{ name: 'APC Lagos', address: 'notifications@apclagos.org' }`, using Nodemailer's own message properties rather than custom headers.
+- `EMAIL_REPLY_TO` is honoured only on the sender's own domain; any other address is ignored, and `npm run email:check` warns about it.
+- `sendEmail()` accepts no `from`, `replyTo` or `sender`, so no workflow can override them.
+- The SMTP envelope is left to the transport.
+- The admin recipient (`ADMIN_NOTIFICATION_EMAIL`) is configured separately and was not changed.
+
+**Design (`server/src/services/emailTemplates.js`):**
+
+- Shared components: header with the APC logo from www.apclagos.org, title, greeting, reference panel, details table, button, note and footer.
+- Layout: email-safe tables with inline styles, a 600px maximum width, and a mobile media query.
+- Every template has an HTML and a plain-text version. All values are HTML-escaped, and codes use non-breaking hyphens so they stay on one line.
+- The footer shows only APC Lagos, the service name, `notifications@apclagos.org`, www.apclagos.org and the reason the recipient is getting the email.
+
+**Templates redesigned:**
+
+| Email | Subject |
+|---|---|
+| Registration confirmation | `APC Lagos: Registration Confirmation (LAG-…)` |
+| Admin new-registration alert | `APC Lagos: New Agent Registration (LAG-…)` |
+| Decision, approved | `APC Lagos: Registration Approved (LAG-…)` |
+| Decision, declined | `APC Lagos: Registration Update (LAG-…)` |
+
+There is no contact form or password-reset email in this project, so none was added. No email contains NIN, VIN, party registration numbers, bank details or documents.
+
+**Configuration:** `FRONTEND_URL=https://www.apclagos.org` was added to Vercel production, so links and the logo use the official domain.
+
+**Results:**
+
+| Check | Result |
+|---|---|
+| `npm test` | 54 of 54 passed. New tests cover From and Reply-To on every workflow, no personal address in generated headers or content, rejected overrides, Reply-To domain rules, layout and footer, and HTML escaping. |
+| `npm run build` / `npm audit` | Passed / 0 vulnerabilities |
+| Rendered templates (Chrome, 800px and 375px) | No horizontal overflow; logo loads; layout consistent |
+| Raw generated headers (production settings, with the personal `EMAIL_REPLY_TO` set locally) | `From: APC Lagos <notifications@apclagos.org>` and `Reply-To: APC Lagos <notifications@apclagos.org>`. The Gmail address appears only as the `To` of the admin alert, which is its configured recipient. |
+| Real test via Hostinger to the authorised inbox | Accepted: `250 2.0.0 Ok: queued as 4j9sJZ03Drz1xmS`, correlation ID `e3dd183f-282a-405f-b4fb-39f55cea9c95`. Received headers to be confirmed by the owner. |
+| Deployment | Commit `3feece0`, deployment `apcagent-hsiokcpkx`, Ready, serving www.apclagos.org; health reports email and encryption configured |
+
+**Manual actions:**
+
+1. In the Gmail inbox `ayindegeorge20@gmail.com`, open "APC Lagos: Registration Confirmation (LAG-TEST-0000) [TEST]", then use **⋮ → Show original**. Confirm that `From` and `Reply-To` read `APC Lagos <notifications@apclagos.org>` and that SPF, DKIM and DMARC show `PASS`.
+2. Remove `EMAIL_REPLY_TO` from the local `.env`, or set it to an apclagos.org address. It is ignored now, but should not hold a personal address.
