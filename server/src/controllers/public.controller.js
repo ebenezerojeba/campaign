@@ -1,13 +1,16 @@
+import crypto from 'node:crypto';
 import { env, emailConfigured } from '../config/env.js';
 import { dbConfigured, dbState, connectDb } from '../config/db.js';
-import { Volunteer } from '../models/Volunteer.js';
-import { Opportunity } from '../models/Opportunity.js';
+import { Agent } from '../models/Agent.js';
 import { ApiError, send } from '../utils/ApiError.js';
 import { generateReference } from '../utils/reference.js';
+import { encryptField } from '../utils/secure.js';
 import { normalisePhone } from '../../../shared/schemas.js';
-import { PRIVACY_NOTICE_VERSION, labelFor, VOLUNTEER_STATUSES } from '../../../shared/options.js';
+import { PRIVACY_NOTICE_VERSION, labelFor, REGISTRATION_STATUSES } from '../../../shared/options.js';
+import { OPTIONAL_FIELDS, requiredDocuments } from '../../../shared/agentForm.js';
 import { sendRegistrationEmails } from '../services/email.js';
 import { resolveElectoral, wardsFor, pollingUnitsFor, senatorialDistricts } from '../services/electoral.js';
+import { checkDocument, storeDocument, deleteDocuments } from '../services/documents.js';
 
 export async function health(_req, res) {
   let db = dbState();
@@ -29,121 +32,8 @@ export async function publicConfig(_req, res) {
   });
 }
 
-// Aggregate, non-identifying figures only. Sample records are counted only
-// when DEMO_MODE is on, and the response says so for labelling.
-export async function publicStats(_req, res) {
-  const match = env.demoMode ? {} : { isSample: false };
-  const [byStatus, lgas, opportunities, sampleCount] = await Promise.all([
-    Volunteer.aggregate([{ $match: match }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
-    Volunteer.distinct('lga', match),
-    Opportunity.countDocuments({ status: 'published', ...(env.demoMode ? {} : { isSample: false }) }),
-    env.demoMode ? Volunteer.countDocuments({ isSample: true }) : 0,
-  ]);
-  const count = (s) => byStatus.find((b) => b._id === s)?.n ?? 0;
-  send(res, {
-    volunteers: byStatus.reduce((t, b) => t + b.n, 0),
-    approved: count('approved'),
-    opportunities,
-    lgasRepresented: lgas.length,
-    includesSampleData: sampleCount > 0,
-  });
-}
-
-const publicOpportunityFields = 'title summary description category skills eligibility location startDate endDate commitment capacity coverImage publishedAt isSample';
-
-export async function listOpportunities(req, res) {
-  const { category, limit } = req.validatedQuery;
-  const filter = { status: 'published' };
-  if (!env.demoMode) filter.isSample = false;
-  if (category) filter.category = category;
-  const items = await Opportunity.find(filter).select(publicOpportunityFields).sort({ startDate: 1, publishedAt: -1 }).limit(limit).lean();
-  send(res, items);
-}
-
-export async function getOpportunity(req, res) {
-  const filter = { _id: req.params.id, status: 'published' };
-  if (!env.demoMode) filter.isSample = false;
-  const item = await Opportunity.findOne(filter).select(publicOpportunityFields).lean();
-  if (!item) throw ApiError.notFound('This opportunity is no longer available');
-  send(res, item);
-}
-
-const DUPLICATE_MESSAGE = 'An application with this phone number or email address already exists. Check your application status instead, or contact the programme team if you need to change your details.';
-
-export async function register(req, res) {
-  const data = req.body;
-  const phone = normalisePhone(data.phone);
-  const email = data.email || undefined;
-
-  // Never trust the browser's ward or polling unit: check both against the official data.
-  const electoral = resolveElectoral(data);
-  if (electoral.errors) throw new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields: electoral.errors });
-
-  const existing = await Volunteer.exists({ $or: [{ phone }, ...(email ? [{ email }] : [])] });
-  if (existing) throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
-
-  const doc = {
-    firstName: data.firstName,
-    lastName: data.lastName,
-    email,
-    phone,
-    contactMethod: data.contactMethod,
-    agentType: data.agentType,
-    stateOfOrigin: data.stateOfOrigin,
-    lgaOfOrigin: data.lgaOfOrigin,
-    state: data.state,
-    lga: data.lga,
-    lcda: data.lcda || undefined,
-    ...electoral.fields,
-    community: data.community || undefined,
-    interests: [...new Set(data.interests)],
-    skills: [...new Set(data.skills)],
-    availability: [...new Set(data.availability)],
-    participationFormat: data.participationFormat,
-    motivation: data.motivation || undefined,
-    consent: {
-      processing: true,
-      communications: data.consentCommunications,
-      ageConfirmed: true,
-      noticeVersion: PRIVACY_NOTICE_VERSION,
-      at: new Date(),
-    },
-    statusHistory: [{ from: null, to: 'pending', reason: 'Application submitted', at: new Date() }],
-  };
-
-  let volunteer;
-  for (let attempt = 0; attempt < 5 && !volunteer; attempt += 1) {
-    try {
-      volunteer = await Volunteer.create({ ...doc, reference: generateReference() });
-    } catch (err) {
-      if (err?.code !== 11000) throw err;
-      const key = Object.keys(err.keyPattern ?? {})[0];
-      if (key !== 'reference') throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
-      // Reference collision: retry with a new one.
-    }
-  }
-  if (!volunteer) throw new ApiError(500, 'SERVER_ERROR', 'We could not create a reference. Please try again.');
-
-  // The registration is already saved; email outcome is recorded, never fatal.
-  const notifications = await sendRegistrationEmails(volunteer).catch((err) => [
-    { type: 'registration_confirmation', status: 'failed', error: String(err?.message).slice(0, 300), at: new Date() },
-  ]);
-  await Volunteer.updateOne({ _id: volunteer._id }, { $push: { notifications: { $each: notifications } } }).catch((err) =>
-    console.error('[register] could not record notification status', err.message),
-  );
-  const confirmation = notifications.find((n) => n.type === 'registration_confirmation');
-
-  send(res, {
-    reference: volunteer.reference,
-    firstName: volunteer.firstName,
-    status: volunteer.status,
-    contactMethod: volunteer.contactMethod,
-    confirmationEmail: confirmation?.status ?? 'skipped',
-  }, undefined, 201);
-}
-
 // Official ward and polling-unit options. `configured: false` means no data
-// has been supplied for that area; the form shows that instead of options.
+// has been supplied for that area; the form says so instead of showing options.
 const LOCATION_CACHE = 'public, max-age=3600';
 
 export async function listWards(req, res) {
@@ -160,18 +50,130 @@ export async function listPollingUnits(req, res) {
   send(res, items);
 }
 
+// The multipart form sends its text fields as JSON in "data", so booleans
+// and empty strings survive. Validation runs on the parsed object next.
+export function parseRegistrationData(req, _res, next) {
+  try {
+    req.body = JSON.parse(req.body?.data ?? '{}');
+    return next();
+  } catch {
+    return next(ApiError.badRequest('The registration could not be read. Refresh the page and try again.'));
+  }
+}
+
+const DUPLICATE_MESSAGE = 'A registration with this phone number or email address already exists. Check your registration status instead, or contact the team if you need to change your details.';
+
+const fieldErrors = (fields) => new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields });
+
+// Keyed hash so duplicate NINs can be found without storing them in clear.
+const ninIndex = (nin) => crypto.createHmac('sha256', env.dataEncryptionKey).update(nin).digest('hex');
+
+export async function register(req, res) {
+  const data = req.body;
+  const phone = normalisePhone(data.phone);
+  const { email } = data;
+
+  // Never trust the browser's ward or polling unit: check both against the official data.
+  const electoral = resolveElectoral(data);
+  const errors = { ...(electoral.errors ?? {}) };
+
+  // Check every required document by its content, collecting all problems at once.
+  const checked = {};
+  for (const kind of requiredDocuments()) {
+    try {
+      checked[kind] = checkDocument(kind, req.files?.[kind]?.[0]);
+    } catch (err) {
+      if (err.code !== 'VALIDATION_FAILED') throw err;
+      Object.assign(errors, err.details.fields);
+    }
+  }
+  if (Object.keys(errors).length) throw fieldErrors(errors);
+
+  const existing = await Agent.exists({ $or: [{ phone }, { email }] });
+  if (existing) throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
+  if (await Agent.exists({ 'documents.pvc.sha256': checked.pvc.sha256 })) {
+    throw fieldErrors({ pvc: 'This voter’s card file has already been used in another registration. Upload a photo of your own card.' });
+  }
+
+  let nin;
+  if (OPTIONAL_FIELDS.nin) {
+    const encrypted = encryptField(data.nin); // fails clearly if no key is configured
+    const hash = ninIndex(data.nin);
+    if (await Agent.exists({ 'nin.hash': hash })) throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
+    nin = { encrypted, last4: data.nin.slice(-4), hash };
+  }
+
+  const doc = {
+    firstName: data.firstName,
+    middleName: data.middleName || undefined,
+    lastName: data.lastName,
+    email,
+    phone,
+    dateOfBirth: OPTIONAL_FIELDS.dateOfBirth ? data.dateOfBirth : undefined,
+    nin,
+    stateOfOrigin: data.stateOfOrigin,
+    lgaOfOrigin: data.lgaOfOrigin,
+    agentCategory: data.agentCategory,
+    state: data.state,
+    lga: data.lga,
+    ...electoral.fields,
+    consent: {
+      processing: true,
+      sensitiveData: true,
+      declarationAccurate: true,
+      ageConfirmed: true,
+      noticeVersion: PRIVACY_NOTICE_VERSION,
+      at: new Date(),
+    },
+    statusHistory: [{ from: null, to: 'pending', reason: 'Registration submitted', at: new Date() }],
+  };
+
+  let agent;
+  for (let attempt = 0; attempt < 5 && !agent; attempt += 1) {
+    const reference = generateReference();
+    const stored = {};
+    try {
+      for (const [kind, file] of Object.entries(checked)) stored[kind] = await storeDocument(kind, file, reference);
+      agent = await Agent.create({ ...doc, reference, documents: stored });
+    } catch (err) {
+      // Never leave orphaned documents behind.
+      await deleteDocuments(Object.values(stored).map((d) => d.fileId));
+      if (err?.code !== 11000) throw err;
+      const key = Object.keys(err.keyPattern ?? {})[0];
+      if (key !== 'reference') throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
+      // Reference collision: retry with a new one.
+    }
+  }
+  if (!agent) throw new ApiError(500, 'SERVER_ERROR', 'We could not create a reference. Please try again.');
+
+  // The registration is already saved; email outcome is recorded, never fatal.
+  const notifications = await sendRegistrationEmails(agent).catch((err) => [
+    { type: 'registration_confirmation', status: 'failed', error: String(err?.message).slice(0, 300), at: new Date() },
+  ]);
+  await Agent.updateOne({ _id: agent._id }, { $push: { notifications: { $each: notifications } } }).catch((err) =>
+    console.error('[register] could not record notification status', err.message),
+  );
+  const confirmation = notifications.find((n) => n.type === 'registration_confirmation');
+
+  send(res, {
+    reference: agent.reference,
+    firstName: agent.firstName,
+    status: agent.status,
+    confirmationEmail: confirmation?.status ?? 'skipped',
+  }, undefined, 201);
+}
+
 // Requires both the reference and the registered phone number, and returns
 // status only: no personal details beyond the applicant's first name.
 export async function checkStatus(req, res) {
   const { reference, phone } = req.body;
-  const volunteer = await Volunteer.findOne({ reference, phone: normalisePhone(phone) }).select('firstName status createdAt reviewedAt').lean();
-  if (!volunteer) throw ApiError.notFound('We could not find an application with that reference and phone number. Check both and try again.');
+  const agent = await Agent.findOne({ reference, phone: normalisePhone(phone) }).select('firstName status createdAt reviewedAt').lean();
+  if (!agent) throw ApiError.notFound('We could not find a registration with that reference and phone number. Check both and try again.');
   send(res, {
-    firstName: volunteer.firstName,
-    status: volunteer.status,
-    statusLabel: labelFor(VOLUNTEER_STATUSES, volunteer.status),
-    submittedAt: volunteer.createdAt,
-    reviewedAt: volunteer.reviewedAt ?? null,
+    firstName: agent.firstName,
+    status: agent.status,
+    statusLabel: labelFor(REGISTRATION_STATUSES, agent.status),
+    submittedAt: agent.createdAt,
+    reviewedAt: agent.reviewedAt ?? null,
   });
 }
-

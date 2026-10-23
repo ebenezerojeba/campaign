@@ -1,18 +1,14 @@
 import { useId, useState } from 'react';
 import { Link } from 'react-router';
 import { m, AnimatePresence } from 'framer-motion';
-import { Users, Sprout, CalendarCheck, BookOpenText, Plus, Minus, ArrowRight, Compass } from 'lucide-react';
+import { Mail, MapPin, Camera, IdCard, Plus, Minus, ArrowRight, Lock, EyeOff, FileCheck2, Trash2 } from 'lucide-react';
 import { AdireTile } from '../components/brand/Adire.jsx';
 import { ButtonLink } from '../components/ui/Button.jsx';
-import { Badge, EmptyState } from '../components/ui/Feedback.jsx';
-import { OpportunityCard, OpportunityCardSkeleton } from '../components/OpportunityCard.jsx';
 import { site } from '../content/site.js';
-import { get } from '../lib/api.js';
-import { useFetch } from '../lib/useFetch.js';
 import { useConfig } from '../lib/config.jsx';
-import { formatNumber, cx } from '../lib/format.js';
+import { cx } from '../lib/format.js';
 
-const ICONS = { Users, Sprout, CalendarCheck, BookOpenText };
+const ICONS = { Mail, MapPin, Camera, IdCard };
 const ease = [0.22, 1, 0.36, 1];
 
 // 3 columns × 4 rows of cloth on large screens.
@@ -33,10 +29,11 @@ function Hero() {
           {loaded && registrationOpen && (
             <m.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-medium text-green-50">
               <span className="relative flex size-2"><span className="absolute inline-flex size-full animate-ping rounded-full bg-gold-500 opacity-60 motion-reduce:hidden" /><span className="relative inline-flex size-2 rounded-full bg-gold-500" /></span>
-              Volunteer registration is open across Lagos State
+              Agent registration is open across Lagos State
             </m.p>
           )}
           <h1 id="hero-title" className="type-hero">
+            <span className="sr-only">{site.brand.title}. </span>
             {site.hero.headline.map((line, i) => (
               <m.span
                 key={line}
@@ -54,10 +51,10 @@ function Hero() {
           </m.p>
           <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.6 }} className="mt-9 flex flex-col gap-3 sm:flex-row">
             <ButtonLink to="/register" variant="gold" size="lg" iconRight={ArrowRight}>{site.hero.primary}</ButtonLink>
-            <ButtonLink to="/#about" variant="onDark" size="lg">{site.hero.secondary}</ButtonLink>
+            <ButtonLink to="/#requirements" variant="onDark" size="lg">{site.hero.secondary}</ButtonLink>
           </m.div>
           <dl className="mt-12 grid max-w-lg grid-cols-3 gap-4 border-t border-white/12 pt-6">
-            {[['20', 'local government areas'], ['5 min', 'to register on a phone'], ['Free', 'no fees, ever']].map(([v, l]) => (
+            {[['20', 'local government areas'], ['13,325', 'polling units in the official list'], ['Free', 'no fees, ever']].map(([v, l]) => (
               <div key={l}>
                 <dt className="sr-only">{l}</dt>
                 <dd className="font-display text-2xl font-bold text-white sm:text-3xl">{v}</dd>
@@ -96,23 +93,23 @@ function Hero() {
   );
 }
 
-function About() {
+function Requirements() {
   return (
-    <section id="about" className="py-20 sm:py-28" aria-labelledby="about-title">
+    <section id="requirements" className="py-20 sm:py-28" aria-labelledby="req-title">
       <div className="container-page grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
         <div className="lg:sticky lg:top-28 lg:self-start">
-          <h2 id="about-title" className="type-h2 text-forest-900">{site.about.title}</h2>
-          <p className="type-lead mt-6 text-slate-600">{site.about.body}</p>
-          <ButtonLink to="/register" variant="dark" className="mt-8" iconRight={ArrowRight}>Start your application</ButtonLink>
+          <h2 id="req-title" className="type-h2 text-forest-900">Have these ready before you start</h2>
+          <p className="type-lead mt-6 text-slate-600">Registration is for people who will serve at a polling unit in Lagos State. The team checks every registration before approving it.</p>
+          <ButtonLink to="/register" variant="dark" className="mt-8" iconRight={ArrowRight}>Start registration</ButtonLink>
         </div>
         <ul className="grid gap-px overflow-hidden rounded-[var(--radius-xl)] border border-line bg-line sm:grid-cols-2">
-          {site.about.areas.map((area) => {
-            const Icon = ICONS[area.icon];
+          {site.requirements.map((item) => {
+            const Icon = ICONS[item.icon];
             return (
-              <li key={area.title} className="bg-white p-7 sm:p-8">
+              <li key={item.title} className="bg-white p-7 sm:p-8">
                 <span className="flex size-12 items-center justify-center rounded-xl bg-green-50 text-green-700"><Icon className="size-6" aria-hidden /></span>
-                <h3 className="type-h3 mt-6 text-forest-900">{area.title}</h3>
-                <p className="mt-2.5 text-[15px] leading-relaxed text-slate-600">{area.body}</p>
+                <h3 className="type-h3 mt-6 text-forest-900">{item.title}</h3>
+                <p className="mt-2.5 text-[15px] leading-relaxed text-slate-600">{item.body}</p>
               </li>
             );
           })}
@@ -140,84 +137,42 @@ function HowItWorks() {
           ))}
         </ol>
         <div className="mt-14 flex flex-col gap-3 sm:flex-row">
-          <ButtonLink to="/register" size="lg">Complete your application</ButtonLink>
-          <ButtonLink to="/status" variant="secondary" size="lg">Check an existing application</ButtonLink>
+          <ButtonLink to="/register" size="lg">Start registration</ButtonLink>
+          <ButtonLink to="/status" variant="secondary" size="lg">Check an existing registration</ButtonLink>
         </div>
       </div>
     </section>
   );
 }
 
-function OpportunitiesPreview() {
-  const { data, loading, error, reload } = useFetch((signal) => get('/opportunities?limit=6', { signal }), 'home-opps');
-  return (
-    <section id="opportunities" className="py-20 sm:py-28" aria-labelledby="opps-title">
-      <div className="container-page">
-        <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
-          <div className="max-w-2xl">
-            <h2 id="opps-title" className="type-h2 text-forest-900">Ways to take part</h2>
-            <p className="type-lead mt-4 text-slate-600">Activities published by the programme team. Register first, and the team will match you with the ones that fit your interests and availability.</p>
-          </div>
-          {data?.length > 0 && <ButtonLink to="/opportunities" variant="secondary" iconRight={ArrowRight}>See all opportunities</ButtonLink>}
-        </div>
-        <div className="mt-12">
-          {loading ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map((i) => <OpportunityCardSkeleton key={i} />)}</div>
-          ) : error ? (
-            <EmptyState icon={Compass} title="Opportunities are not available right now" action={error.code !== 'DB_NOT_CONFIGURED' && <button type="button" className="font-semibold text-green-700 underline underline-offset-4" onClick={reload}>Try again</button>}>
-              {error.code === 'DB_NOT_CONFIGURED' ? 'Published activities will appear here once the programme database is connected.' : error.message}
-            </EmptyState>
-          ) : data.length === 0 ? (
-            <EmptyState icon={Compass} title="New opportunities are on the way" action={<ButtonLink to="/register">Register to be notified</ButtonLink>}>
-              The programme team has not published activities yet. Register now and you will be among the first to hear about them.
-            </EmptyState>
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {data.map((item) => <OpportunityCard key={item._id} item={item} />)}
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
+const DATA_POINTS = [
+  { icon: Lock, title: 'Stored securely', body: 'Documents are kept in a protected database, never at a public link. Only authorised registration staff can open them.' },
+  { icon: EyeOff, title: 'Every view is logged', body: 'Each time a staff member opens a record or a document, the system records who and when.' },
+  { icon: FileCheck2, title: 'Checked, not certified', body: 'Uploads are checked to be real, complete images or PDFs. That does not prove a voter’s card is genuine: staff verify cards separately.' },
+  { icon: Trash2, title: 'Kept only as long as needed', body: 'Registrations and documents are deleted after the retention period, or sooner if you ask.' },
+];
 
-function Impact() {
-  const { data, loading, error } = useFetch((signal) => get('/stats', { signal }), 'stats');
-  if (error) return null; // nothing to show without verified figures
-  const stats = data && [
-    { value: data.volunteers, label: 'volunteers registered' },
-    { value: data.approved, label: 'applications approved' },
-    { value: data.lgasRepresented, label: 'of 20 LGAs represented' },
-    { value: data.opportunities, label: 'opportunities open now' },
-  ];
+function YourData() {
   return (
-    <section className="relative overflow-hidden bg-forest-900 py-20 text-white sm:py-24" aria-labelledby="impact-title">
+    <section id="your-data" className="relative overflow-hidden bg-forest-900 py-20 text-white sm:py-24" aria-labelledby="data-title">
       <div className="absolute inset-y-0 right-0 hidden w-48 opacity-25 lg:block" aria-hidden>
         <div className="grid h-full grid-rows-4">
           {['oniko', 'lagoon', 'dots', 'stitch'].map((motif) => <AdireTile key={motif} motif={motif} palette="deep" className="h-full w-full" />)}
         </div>
       </div>
       <div className="container-page relative">
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 id="impact-title" className="type-h2">The programme so far</h2>
-          {data?.includesSampleData && <Badge tone="sample">Demonstration data</Badge>}
-        </div>
-        {loading ? (
-          <div className="mt-12 grid grid-cols-2 gap-8 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="h-24 rounded-xl bg-white/5" />)}</div>
-        ) : data.volunteers === 0 ? (
-          <p className="type-lead mt-6 max-w-xl text-green-50/80">Registration has just opened. Figures will appear here as volunteers join. <Link to="/register" className="font-semibold text-gold-500 underline underline-offset-4">Be among the first to register.</Link></p>
-        ) : (
-          <dl className="mt-12 grid grid-cols-2 gap-x-6 gap-y-10 lg:grid-cols-4">
-            {stats.map((s) => (
-              <div key={s.label} className="flex flex-col border-l-2 border-gold-500 pl-5">
-                <dt className="order-2 mt-1 text-[15px] text-green-50/75">{s.label}</dt>
-                <dd className="font-display text-5xl font-bold tracking-tight tabular sm:text-6xl">{formatNumber(s.value)}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        {data?.includesSampleData && <p className="mt-10 max-w-2xl text-sm text-green-50/60">These figures include sample records created for demonstration. They are not real registrations.</p>}
+        <h2 id="data-title" className="type-h2 max-w-2xl">Your voter’s card and photograph are sensitive. We treat them that way.</h2>
+        <p className="type-lead mt-5 max-w-2xl text-green-50/80">We collect only what registration needs, explain why, and ask for your consent before you submit, in line with the Nigeria Data Protection Act 2023.</p>
+        <ul className="mt-12 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:mr-48 lg:grid-cols-4">
+          {DATA_POINTS.map(({ icon: Icon, title, body }) => (
+            <li key={title} className="border-l-2 border-gold-500 pl-5">
+              <Icon className="size-6 text-gold-500" aria-hidden />
+              <h3 className="mt-3 font-display text-lg font-semibold">{title}</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-green-50/75">{body}</p>
+            </li>
+          ))}
+        </ul>
+        <Link to="/privacy" className="mt-10 inline-flex items-center gap-1.5 font-semibold text-gold-500 underline-offset-4 hover:underline">Read the privacy notice <ArrowRight className="size-4" aria-hidden /></Link>
       </div>
     </section>
   );
@@ -253,7 +208,7 @@ function Faq() {
       <div className="container-page grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
         <div>
           <h2 id="faq-title" className="type-h2 text-forest-900">Questions and answers</h2>
-          <p className="type-lead mt-5 text-slate-600">What to expect when you register, and how your information is handled.</p>
+          <p className="type-lead mt-5 text-slate-600">What to expect when you register, and how your documents are handled.</p>
           <Link to="/privacy" className="mt-6 inline-flex items-center gap-1.5 font-semibold text-green-700 underline-offset-4 hover:underline">Read the privacy notice <ArrowRight className="size-4" aria-hidden /></Link>
         </div>
         <ul className="border-t border-line">
@@ -273,9 +228,9 @@ function ClosingCta() {
             <AdireTile motif="oniko" palette="green" className="size-full" />
           </div>
           <div className="relative max-w-xl">
-            <h2 id="cta-title" className="type-h2">Lagos works when its people take part</h2>
-            <p className="type-lead mt-4 text-green-50/90">Five minutes on your phone is all it takes to register. No fees, no documents to upload.</p>
-            <ButtonLink to="/register" variant="gold" size="lg" className="mt-8" iconRight={ArrowRight}>Become a Volunteer</ButtonLink>
+            <h2 id="cta-title" className="type-h2">Every polling unit needs its people</h2>
+            <p className="type-lead mt-4 text-green-50/90">Have your passport photograph and voter’s card ready. Registration takes about ten minutes and is free.</p>
+            <ButtonLink to="/register" variant="gold" size="lg" className="mt-8" iconRight={ArrowRight}>Start registration</ButtonLink>
           </div>
         </div>
       </div>
@@ -287,10 +242,9 @@ export default function Home() {
   return (
     <>
       <Hero />
-      <About />
+      <Requirements />
       <HowItWorks />
-      <OpportunitiesPreview />
-      <Impact />
+      <YourData />
       <Faq />
       <ClosingCta />
     </>

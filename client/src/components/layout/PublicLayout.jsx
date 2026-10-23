@@ -71,7 +71,7 @@ function SiteHeader() {
           </ul>
         </nav>
         <div className="flex items-center gap-2">
-          <span className="hidden sm:block"><ButtonLink to="/register" variant={overHero ? 'gold' : 'primary'}>Register as a Volunteer</ButtonLink></span>
+          <span className="hidden sm:block"><ButtonLink to="/register" variant={overHero ? 'gold' : 'primary'}>Register as an agent</ButtonLink></span>
           <button
             ref={menuButton}
             type="button"
@@ -97,13 +97,13 @@ function SiteHeader() {
             className="absolute inset-x-0 top-[72px] h-[calc(100dvh-72px)] overflow-y-auto border-t border-line bg-white lg:hidden"
           >
             <nav aria-label="Mobile" className="container-page flex flex-col py-4">
-              {[...site.nav, { label: 'Check application status', href: '/status' }, { label: 'Volunteer sign in', href: '/portal' }].map((item) => (
+              {[...site.nav, { label: 'Check registration status', href: '/status' }].map((item) => (
                 <Link key={item.href} to={item.href} className="flex items-center justify-between border-b border-line py-4 font-display text-2xl font-semibold text-forest-900">
                   {item.label}
                   <ArrowRight className="size-5 text-slate-400" aria-hidden />
                 </Link>
               ))}
-              <ButtonLink to="/register" size="lg" block className="mt-6">Register as a Volunteer</ButtonLink>
+              <ButtonLink to="/register" size="lg" block className="mt-6">Register as an agent</ButtonLink>
             </nav>
           </m.div>
         )}
@@ -114,7 +114,7 @@ function SiteHeader() {
 
 function SiteFooter() {
   const { contact } = useConfig();
-  const wa = whatsappLink(contact.whatsapp, 'Hello, I have a question about the APC Lagos Volunteer Programme.');
+  const wa = whatsappLink(contact.whatsapp, 'Hello, I have a question about APC Lagos polling unit agent registration.');
   const hasContact = contact.email || contact.phone || wa || contact.address;
   return (
     <footer id="contact" className="bg-forest-950 text-green-50/80">
@@ -123,16 +123,15 @@ function SiteFooter() {
         <div>
           <Logo tone="light" />
           <p className="mt-5 max-w-sm text-[15px] leading-relaxed text-green-50/70">
-            Residents across Lagos State contributing their time, skills and ideas to community life.
+            Registration for agents, canvassers, mobilizers and polling unit agents serving at polling units across Lagos State.
           </p>
         </div>
         <div>
-          <h2 className="font-display text-lg font-semibold text-white">Programme</h2>
+          <h2 className="font-display text-lg font-semibold text-white">Registration</h2>
           <ul className="mt-4 space-y-2.5 text-[15px]">
-            <li><Link className="hover:text-white" to="/register">Register as a volunteer</Link></li>
-            <li><Link className="hover:text-white" to="/opportunities">Opportunities</Link></li>
-            <li><Link className="hover:text-white" to="/status">Check application status</Link></li>
-            <li><Link className="hover:text-white" to="/portal">Volunteer sign in</Link></li>
+            <li><Link className="hover:text-white" to="/register">Register as an agent</Link></li>
+            <li><Link className="hover:text-white" to="/status">Check registration status</Link></li>
+            <li><Link className="hover:text-white" to="/#requirements">What you need</Link></li>
             <li><Link className="hover:text-white" to="/#faq">Questions and answers</Link></li>
           </ul>
         </div>
@@ -146,13 +145,13 @@ function SiteFooter() {
               {contact.address && <li className="flex gap-2.5"><MapPin className="mt-1 size-4 shrink-0 text-gold-500" aria-hidden /><span>{contact.address}</span></li>}
             </ul>
           ) : (
-            <p className="mt-4 text-[15px] text-green-50/70">Contact details for the programme team will be published here. Registered volunteers are contacted by their preferred method.</p>
+            <p className="mt-4 text-[15px] text-green-50/70">Contact details for the registration team will be published here. Registered agents are contacted by email.</p>
           )}
         </div>
       </div>
       <div className="border-t border-white/10">
         <div className="container-page flex flex-col gap-3 py-6 text-sm text-green-50/60 sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} {site.brand.name} {site.brand.programme}</p>
+          <p>© {new Date().getFullYear()} {site.brand.title}</p>
           <ul className="flex gap-5">
             <li><Link className="hover:text-white" to="/privacy">Privacy notice</Link></li>
             <li><Link className="hover:text-white" to="/terms">Terms of use</Link></li>
@@ -169,7 +168,7 @@ function ServiceBanner() {
   if (!config.reachable) {
     return (
       <div className="container-page pt-4">
-        <Alert tone="warning" title="We cannot reach the registration service right now">Check your internet connection. You can still read about the programme.</Alert>
+        <Alert tone="warning" title="We cannot reach the registration service right now">Check your internet connection. You can still read about registration.</Alert>
       </div>
     );
   }

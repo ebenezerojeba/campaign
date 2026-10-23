@@ -12,7 +12,7 @@ export default function Audit() {
   const { data, meta, loading, error, reload } = useFetch((signal) => api.get(`/audit?page=${page}`, { signal }), page);
   return (
     <>
-      <PageHeader title="Audit log" description="Sensitive staff actions: sign-ins, decisions, exports, edits and deletions. Record views are logged on each volunteer’s page." />
+      <PageHeader title="Audit log" description="Sensitive staff actions: sign-ins, decisions, exports, edits and deletions. Record and document views are logged on each registration’s page." />
       <div className="rounded-[var(--radius-lg)] border border-line bg-white">
         {error ? <div className="p-4"><ErrorState error={error} onRetry={reload} /></div> : loading ? <div className="p-4"><Skeleton className="h-64" /></div> : data.length === 0 ? (
           <div className="p-4"><EmptyState icon={ScrollText} title="No actions recorded yet" /></div>

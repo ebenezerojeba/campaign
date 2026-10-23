@@ -37,24 +37,14 @@ export async function sendEmail({ to, subject, html, text }) {
 
 const record = (type, outcome) => ({ type, channel: 'email', at: new Date(), ...outcome });
 
-export async function sendRegistrationEmails(volunteer) {
-  const jobs = [];
-  if (volunteer.email) {
-    jobs.push(sendEmail({ to: volunteer.email, ...templates.registrationConfirmation(volunteer) }).then((o) => record('registration_confirmation', o)));
-  } else {
-    jobs.push(Promise.resolve(record('registration_confirmation', { status: 'skipped', error: 'Applicant gave no email address' })));
-  }
+export async function sendRegistrationEmails(agent) {
+  const jobs = [sendEmail({ to: agent.email, ...templates.registrationConfirmation(agent) }).then((o) => record('registration_confirmation', o))];
   if (env.resend.adminTo) {
-    jobs.push(sendEmail({ to: env.resend.adminTo, ...templates.adminAlert(volunteer) }).then((o) => record('admin_alert', o)));
+    jobs.push(sendEmail({ to: env.resend.adminTo, ...templates.adminAlert(agent) }).then((o) => record('admin_alert', o)));
   }
   return Promise.all(jobs);
 }
 
-export async function sendDecisionEmail(volunteer) {
-  if (!volunteer.email) return record('decision', { status: 'skipped', error: 'Applicant gave no email address' });
-  return record('decision', await sendEmail({ to: volunteer.email, ...templates.decision(volunteer) }));
-}
-
-export async function sendSignInCode(volunteer, code) {
-  return record('sign_in_code', await sendEmail({ to: volunteer.email, ...templates.signInCode(volunteer, code) }));
+export async function sendDecisionEmail(agent) {
+  return record('decision', await sendEmail({ to: agent.email, ...templates.decision(agent) }));
 }

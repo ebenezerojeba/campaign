@@ -14,11 +14,3 @@ function randomChunk(len) {
 export function generateReference(prefix = 'LAG') {
   return `${prefix}-${randomChunk(4)}-${randomChunk(4)}`;
 }
-
-export function generateNumericCode(length = 6) {
-  return String(crypto.randomInt(0, 10 ** length)).padStart(length, '0');
-}
-
-export function hashCode(code) {
-  return crypto.createHash('sha256').update(code).digest('hex');
-}

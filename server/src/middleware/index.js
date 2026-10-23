@@ -5,7 +5,6 @@ import { env } from '../config/env.js';
 import { connectDb, dbConfigured } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { User, PERMISSIONS } from '../models/User.js';
-import { Volunteer } from '../models/Volunteer.js';
 
 // ---------- Validation ----------
 
@@ -84,7 +83,6 @@ export const csrfGuard = (req, _res, next) => {
 // ---------- Sessions ----------
 
 export const STAFF_COOKIE = 'apc_staff';
-export const VOLUNTEER_COOKIE = 'apc_volunteer';
 
 const cookieOptions = (hours) => ({
   httpOnly: true,
@@ -102,12 +100,6 @@ export function issueStaffSession(res, user) {
   requireSecret();
   const token = jwt.sign({ sub: String(user._id), typ: 'staff', v: user.tokenVersion }, env.jwtSecret, { expiresIn: `${env.adminSessionHours}h` });
   res.cookie(STAFF_COOKIE, token, cookieOptions(env.adminSessionHours));
-}
-
-export function issueVolunteerSession(res, volunteer) {
-  requireSecret();
-  const token = jwt.sign({ sub: String(volunteer._id), typ: 'volunteer' }, env.jwtSecret, { expiresIn: `${env.volunteerSessionHours}h` });
-  res.cookie(VOLUNTEER_COOKIE, token, cookieOptions(env.volunteerSessionHours));
 }
 
 export function clearSession(res, name) {
@@ -145,18 +137,6 @@ export const requirePermission = (permission) => (req, _res, next) => {
   return next();
 };
 
-export const requireVolunteer = async (req, res, next) => {
-  const payload = readToken(req, VOLUNTEER_COOKIE, 'volunteer');
-  if (!payload) return next(ApiError.unauthorized('Sign in to view your volunteer account.'));
-  const volunteer = await Volunteer.findById(payload.sub);
-  if (!volunteer) {
-    clearSession(res, VOLUNTEER_COOKIE);
-    return next(ApiError.unauthorized('Sign in to view your volunteer account.'));
-  }
-  req.volunteer = volunteer;
-  return next();
-};
-
 // ---------- Rate limits ----------
 // In-memory counters: effective per server instance. For multi-instance
 // production traffic, back these with a shared store (see README).
@@ -176,7 +156,6 @@ export const limits = {
   register: limiter(15, 10, 'Too many registration attempts from this connection. Wait 15 minutes and try again.'),
   login: limiter(15, 10, 'Too many sign-in attempts. Wait 15 minutes and try again.'),
   lookup: limiter(15, 20, 'Too many status checks. Wait 15 minutes and try again.'),
-  code: limiter(15, 5, 'Too many code requests. Wait 15 minutes and try again.'),
 };
 
 // ---------- Errors ----------
@@ -192,7 +171,11 @@ export const errorHandler = (err, req, res, _next) => {
   else if (err instanceof mongoose.Error.CastError) error = ApiError.badRequest('Invalid identifier');
   else if (err?.name === 'MongoServerSelectionError' || err?.name === 'MongoNetworkError') {
     error = ApiError.unavailable('The registration service is temporarily unavailable. Please try again shortly.', 'DB_UNAVAILABLE');
-  } else if (err?.name === 'MulterError') error = ApiError.badRequest(err.code === 'LIMIT_FILE_SIZE' ? 'The image must be 5 MB or smaller' : 'The upload could not be processed');
+  } else if (err?.name === 'MulterError') {
+    error = err.code === 'LIMIT_FILE_SIZE'
+      ? new ApiError(413, 'TOO_LARGE', 'One of your files is too large. Use a smaller photo or PDF and try again.')
+      : ApiError.badRequest(err.code === 'LIMIT_UNEXPECTED_FILE' ? 'The form sent an unexpected file' : 'The upload could not be processed');
+  }
 
   if (!(error instanceof ApiError)) {
     console.error('[error]', req.method, req.originalUrl, err);

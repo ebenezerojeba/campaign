@@ -1,12 +1,12 @@
 import { env } from '../config/env.js';
-import { labelFor, INTERESTS, AGENT_TYPES } from '../../../shared/options.js';
+import { labelFor, AGENT_CATEGORIES } from '../../../shared/options.js';
 
 const esc = (s = '') => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const C = { forest: '#0E2A1C', green: '#12813C', gold: '#C9A227', mist: '#EEF4EF', ink: '#17201B', grey: '#5B665F', line: '#DCE4DE' };
 
 // Table-based layout with inline styles for broad email-client support.
-function layout({ preheader, heading, bodyHtml, cta }) {
+function layout({ preheader, heading, bodyHtml, cta, footer }) {
   const button = cta
     ? `<tr><td style="padding:8px 0 4px"><a href="${esc(cta.href)}" style="display:inline-block;background:${C.green};color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:10px;font-size:15px">${esc(cta.label)}</a></td></tr>`
     : '';
@@ -17,13 +17,13 @@ function layout({ preheader, heading, bodyHtml, cta }) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:16px;overflow:hidden;border:1px solid ${C.line}">
 <tr><td style="background:${C.forest};padding:22px 28px;border-bottom:4px solid ${C.gold}">
 <div style="color:#fff;font-size:18px;font-weight:800;letter-spacing:-0.2px">APC Lagos</div>
-<div style="color:#BFD6C6;font-size:13px;margin-top:2px">Volunteer Programme</div></td></tr>
+<div style="color:#BFD6C6;font-size:13px;margin-top:2px">Polling Unit Agent Registration</div></td></tr>
 <tr><td style="padding:28px">
 <h1 style="margin:0 0 14px;font-size:22px;line-height:1.3;color:${C.forest}">${esc(heading)}</h1>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${bodyHtml}${button}</table>
 </td></tr>
 <tr><td style="padding:18px 28px;background:#F7FAF8;border-top:1px solid ${C.line};font-size:12px;line-height:1.6;color:${C.grey}">
-You are receiving this message because this email address was used to register with the APC Lagos Volunteer Programme. If that was not you, reply to this email and we will remove it.
+${footer ?? 'You are receiving this message because this email address was used to register as an APC Lagos polling unit agent. If that was not you, reply to this email and we will look into it.'}
 </td></tr></table></td></tr></table></body></html>`;
 }
 
@@ -33,90 +33,84 @@ const refBlock = (reference) =>
 <div style="font-size:12px;color:${C.grey}">Your registration reference</div>
 <div style="font-size:24px;font-weight:800;letter-spacing:1px;color:${C.forest};font-family:Consolas,Menlo,monospace">${esc(reference)}</div></div></td></tr>`;
 
-export function registrationConfirmation(v) {
+const category = (a) => labelFor(AGENT_CATEGORIES, a.agentCategory);
+const unit = (a) => (a.pollingUnit ? `${a.pollingUnit} (${a.pollingUnitCode})` : 'Not recorded');
+
+export function registrationConfirmation(a) {
   const statusUrl = `${env.frontendUrl}/status`;
   return {
-    subject: `Registration received: ${v.reference}`,
+    subject: `Registration received: ${a.reference}`,
     html: layout({
-      preheader: `Thank you for registering, ${v.firstName}. Keep your reference ${v.reference}.`,
-      heading: `Thank you for registering, ${v.firstName}`,
+      preheader: `Thank you for registering, ${a.firstName}. Keep your reference ${a.reference}.`,
+      heading: `Thank you for registering, ${a.firstName}`,
       bodyHtml:
-        p('We have received your application to join the APC Lagos Volunteer Programme.') +
-        refBlock(v.reference) +
-        p('<strong>What happens next</strong><br>The programme team reviews every application. When a decision is made, we will contact you by your preferred method. You can check your status at any time with your reference and phone number.'),
-      cta: { href: statusUrl, label: 'Check application status' },
+        p(`We have received your registration as <strong>${esc(category(a))}</strong> for polling unit <strong>${esc(unit(a))}</strong>, ${esc(a.ward ?? '')} ward, ${esc(a.lga)} LGA.`) +
+        refBlock(a.reference) +
+        p('<strong>What happens next</strong><br>The team checks your details, passport photograph and voter’s card. We will email you when a decision is made. You can check your status at any time with your reference and phone number.') +
+        p('We will never ask you to send your voter’s card, NIN or passwords by email or WhatsApp.'),
+      cta: { href: statusUrl, label: 'Check registration status' },
     }),
-    text: `Thank you for registering, ${v.firstName}.
+    text: `Thank you for registering, ${a.firstName}.
 
-We have received your application to join the APC Lagos Volunteer Programme.
+We have received your registration as ${category(a)} for polling unit ${unit(a)}, ${a.ward ?? ''} ward, ${a.lga} LGA.
 
-Your registration reference: ${v.reference}
+Your registration reference: ${a.reference}
 
-What happens next: the programme team reviews every application. When a decision is made, we will contact you by your preferred method.
+What happens next: the team checks your details, passport photograph and voter's card. We will email you when a decision is made.
 
-Check your status: ${statusUrl}`,
+Check your status: ${statusUrl}
+
+We will never ask you to send your voter's card, NIN or passwords by email or WhatsApp.`,
   };
 }
 
-export function decision(v) {
-  const approved = v.status === 'approved';
-  const portalUrl = `${env.frontendUrl}/portal`;
-  const heading = approved ? `Welcome to the programme, ${v.firstName}` : `An update on your application, ${v.firstName}`;
+export function decision(a) {
+  const approved = a.status === 'approved';
+  const heading = approved ? `Your registration is approved, ${a.firstName}` : `An update on your registration, ${a.firstName}`;
   const body = approved
-    ? p('Your volunteer application has been approved. The programme team will share activities that match your interests and availability.') +
-      p('Sign in to your volunteer account to see announcements, browse opportunities and update your preferences.')
-    : p('Thank you for your interest in the APC Lagos Volunteer Programme. After review, we are not able to approve your application at this time.') +
-      p('If you believe some of your details were incorrect, reply to this email and the team will look into it.');
+    ? p(`Your registration as <strong>${esc(category(a))}</strong> for polling unit <strong>${esc(unit(a))}</strong> has been approved.`) +
+      p('The coordination team will contact you with your next steps.')
+    : p('Thank you for registering. After review, we are not able to approve your registration at this time.') +
+      p('If you believe some of your details or documents were incorrect, reply to this email and the team will look into it.');
   return {
-    subject: approved ? `Application approved: ${v.reference}` : `Application update: ${v.reference}`,
-    html: layout({ preheader: heading, heading, bodyHtml: refBlock(v.reference) + body, cta: approved ? { href: portalUrl, label: 'Open your volunteer account' } : null }),
+    subject: approved ? `Registration approved: ${a.reference}` : `Registration update: ${a.reference}`,
+    html: layout({ preheader: heading, heading, bodyHtml: refBlock(a.reference) + body }),
     text: `${heading}
 
-Reference: ${v.reference}
+Reference: ${a.reference}
 
 ${approved
-    ? `Your volunteer application has been approved. Sign in to your volunteer account: ${portalUrl}`
-    : 'After review, we are not able to approve your application at this time. If you believe some of your details were incorrect, reply to this email.'}`,
+    ? `Your registration as ${category(a)} for polling unit ${unit(a)} has been approved. The coordination team will contact you with your next steps.`
+    : 'After review, we are not able to approve your registration at this time. If you believe some of your details or documents were incorrect, reply to this email.'}`,
   };
 }
 
-export function adminAlert(v) {
-  const url = `${env.frontendUrl}/admin/volunteers/${v._id}`;
-  const interests = (v.interests || []).map((i) => labelFor(INTERESTS, i)).join(', ');
-  const agent = v.agentType ? labelFor(AGENT_TYPES, v.agentType) : 'Not recorded';
-  const ward = v.ward ? `${v.ward}${v.wardCode ? ` (${v.wardCode})` : ''}` : 'Not recorded';
+// Staff notification. Identifies the registration and its polling unit only:
+// contact details and documents stay in the access-controlled dashboard.
+export function adminAlert(a) {
+  const url = `${env.frontendUrl}/admin/agents/${a._id}`;
+  const rows = [
+    ['Category', category(a)],
+    ['LGA', a.lga],
+    ['Ward', a.ward ? `${a.ward} (${a.wardCode})` : 'Not recorded'],
+    ['Polling unit', unit(a)],
+    ['Senatorial district', a.senatorialDistrict ?? 'Not recorded'],
+  ];
   return {
-    subject: `New volunteer registration: ${v.reference} (${v.lga})`,
+    subject: `New agent registration: ${a.reference} (${a.lga})`,
     html: layout({
-      preheader: `New registration from ${v.lga} LGA`,
-      heading: 'New volunteer registration',
+      preheader: `New ${category(a)} registration from ${a.lga} LGA`,
+      heading: 'New polling unit agent registration',
       bodyHtml:
-        refBlock(v.reference) +
-        p(`<strong>Agent type:</strong> ${esc(agent)}<br><strong>LGA:</strong> ${esc(v.lga)}<br><strong>Ward:</strong> ${esc(ward)}<br><strong>Interests:</strong> ${esc(interests)}`) +
-        p('Personal details are only shown in the admin dashboard.'),
-      cta: { href: url, label: 'Review application' },
+        refBlock(a.reference) +
+        p(rows.map(([k, v]) => `<strong>${esc(k)}:</strong> ${esc(v)}`).join('<br>')) +
+        p('Personal details, the passport photograph and the voter’s card are shown only in the admin dashboard.'),
+      cta: { href: url, label: 'Review registration' },
+      footer: 'You receive this because your address is set as the registration notification address for APC Lagos Polling Unit Agent Registration.',
     }),
-    text: `New volunteer registration ${v.reference}
-Agent type: ${agent}
-LGA: ${v.lga}
-Ward: ${ward}
-Interests: ${interests}
+    text: `New polling unit agent registration ${a.reference}
+${rows.map(([k, v]) => `${k}: ${v}`).join('\n')}
 
 Review: ${url}`,
-  };
-}
-
-export function signInCode(v, code) {
-  return {
-    subject: `Your sign-in code: ${code}`,
-    html: layout({
-      preheader: `Your APC Lagos volunteer sign-in code is ${code}`,
-      heading: 'Your sign-in code',
-      bodyHtml:
-        p(`Hello ${esc(v.firstName)}, use this code to sign in to your volunteer account. It expires in 10 minutes.`) +
-        `<tr><td style="padding:4px 0 18px"><div style="font-size:34px;font-weight:800;letter-spacing:8px;color:${C.forest};font-family:Consolas,Menlo,monospace">${esc(code)}</div></td></tr>` +
-        p('If you did not request this code, you can ignore this email.'),
-    }),
-    text: `Hello ${v.firstName}, your APC Lagos volunteer sign-in code is ${code}. It expires in 10 minutes. If you did not request it, ignore this email.`,
   };
 }

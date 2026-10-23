@@ -56,7 +56,7 @@ const dateOfBirth = z.string({ required_error: 'Enter your date of birth' })
   .refine((v) => ageOn(v) >= 18, 'You must be 18 or older to register')
   .refine((v) => ageOn(v) <= 110, 'Check the year of your date of birth');
 
-const nin = z.string({ required_error: 'Enter your NIN' }).trim().replace(/\s/g, '')
+const nin = z.string({ required_error: 'Enter your NIN' }).transform((v) => v.replace(/\s/g, ''))
   .pipe(z.string().regex(NIN_RE, 'Your NIN is the 11-digit number on your NIN slip or National ID card'));
 
 export const personalSchema = z.object({

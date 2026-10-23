@@ -61,10 +61,12 @@ const agentSchema = new Schema(
     email: { type: String, required: true, trim: true, lowercase: true, maxlength: 120 },
     phone: { type: String, required: true }, // normalised +234XXXXXXXXXX
     dateOfBirth: String, // YYYY-MM-DD, only when the field is switched on
-    // NIN is encrypted at rest (AES-256-GCM); only the last 4 digits are kept in clear for search.
+    // NIN is encrypted at rest (AES-256-GCM). The last 4 digits are kept for
+    // search, and a keyed hash finds duplicates without revealing the number.
     nin: {
       encrypted: { type: String, select: false },
       last4: String,
+      hash: { type: String, select: false },
     },
     stateOfOrigin: { type: String, required: true },
     lgaOfOrigin: { type: String, required: true },
@@ -116,6 +118,7 @@ agentSchema.index({ lga: 1, wardCode: 1, pollingUnitCode: 1 });
 agentSchema.index({ stateOfOrigin: 1, lgaOfOrigin: 1 });
 agentSchema.index({ 'documents.pvc.sha256': 1 });
 agentSchema.index({ 'nin.last4': 1 });
+agentSchema.index({ 'nin.hash': 1 }, { unique: true, partialFilterExpression: { 'nin.hash': { $type: 'string' } } });
 agentSchema.index({ createdAt: -1 });
 agentSchema.index({ isSample: 1 });
 

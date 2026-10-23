@@ -1,68 +1,64 @@
 // Editable site copy. The programme team should review every statement here
-// before launch: describe only activities the organisation has approved.
+// before launch.
 
 export const site = {
   brand: {
     name: 'APC Lagos',
-    programme: 'Volunteer Programme',
+    programme: 'Polling Unit Agent Registration',
+    title: 'APC Lagos Polling Unit Agent Registration',
     // Path to an approved official logo, e.g. '/brand/apc-lagos-logo.svg' (place the file in client/public/brand/).
     logoUrl: '',
   },
 
-  // Approved photography for the hero, e.g. [{ src: '/images/outreach.jpg', alt: 'Volunteers ...' }].
+  // Approved photography for the hero, e.g. [{ src: '/images/agents.jpg', alt: '...' }].
   // Place files in client/public/images/. When empty, the hero shows the Adire cloth wall only.
   heroPhotos: [],
 
   nav: [
-    { label: 'About', href: '/#about' },
-    { label: 'Opportunities', href: '/#opportunities' },
+    { label: 'What you need', href: '/#requirements' },
     { label: 'How it works', href: '/#how-it-works' },
+    { label: 'Your data', href: '/#your-data' },
     { label: 'FAQ', href: '/#faq' },
-    { label: 'Contact', href: '/#contact' },
   ],
 
   hero: {
-    headline: ['Your Community.', 'Your Voice.', 'Your Impact.'],
-    body: 'Join a network of volunteers contributing their time, skills, and ideas to community engagement and civic participation across Lagos State.',
-    primary: 'Become a Volunteer',
-    secondary: 'Learn About the Programme',
+    headline: ['Your polling unit.', 'Your ward.', 'Your Lagos.'],
+    body: 'Register as an APC Lagos agent, canvasser, mobilizer or polling unit agent for the polling unit where you will serve. It takes about ten minutes on a phone.',
+    primary: 'Start registration',
+    secondary: 'See what you need',
   },
 
-  about: {
-    title: 'A programme built around the people of Lagos',
-    body: 'The APC Lagos Volunteer Programme brings together residents who want to take part in community life across the state’s 20 local government areas. Volunteers choose the kind of work that suits them, from speaking with neighbours to helping behind the scenes, and the programme team matches them with activities near them or online.',
-    areas: [
-      { icon: 'Users', title: 'Community engagement', body: 'Meet residents, listen to local priorities and help organise neighbourhood conversations in your area.' },
-      { icon: 'Sprout', title: 'Volunteer development', body: 'Orientation sessions and guidance so every volunteer knows how activities run and how to take part safely.' },
-      { icon: 'CalendarCheck', title: 'Event support', body: 'Welcome attendees, guide seating, support accessibility and keep events running on time.' },
-      { icon: 'BookOpenText', title: 'Civic education', body: 'Share clear, plain-language information about civic participation with your community.' },
-    ],
-  },
+  requirements: [
+    { icon: 'Mail', title: 'Email and phone number', body: 'Your confirmation and decision are sent by email, so use an address you can open.' },
+    { icon: 'MapPin', title: 'Your polling unit', body: 'Choose your LGA, ward and polling unit from the official INEC list for Lagos State.' },
+    { icon: 'Camera', title: 'A passport photograph', body: 'A clear, recent head-and-shoulders photo on a plain background. JPG, PNG or WebP.' },
+    { icon: 'IdCard', title: 'Your voter’s card (PVC)', body: 'A sharp photo of the front of your PVC with every detail readable, or a PDF scan.' },
+  ],
 
   steps: [
-    { title: 'Complete your application', body: 'Tell us who you are, where you live in Lagos and how you would like to help. It takes about five minutes on a phone.' },
-    { title: 'Receive your confirmation', body: 'You get a registration reference straight away. If you gave an email address, we send it there too.' },
-    { title: 'Follow the next steps', body: 'The programme team reviews your application and contacts you by your preferred method with what happens next.' },
+    { title: 'Fill in your details', body: 'Your name, contact details, state of origin, agent category and polling unit.' },
+    { title: 'Upload your documents', body: 'Add your passport photograph and a photo or scan of your voter’s card.' },
+    { title: 'Get your reference', body: 'You receive a registration reference on screen and by email. The team reviews every registration and emails you the decision.' },
   ],
 
   faq: [
-    { q: 'Who can register?', a: 'Anyone aged 18 or over who lives in Lagos State and wants to contribute time to community activities. You do not need previous experience.' },
-    { q: 'What information do you ask for?', a: 'Your name, phone number, preferred contact method, your local government area, and the kind of activities you are interested in. Email is optional. We do not ask for your voter card, bank details, identity documents or your exact address.' },
-    { q: 'How are applications reviewed?', a: 'Members of the programme team read each application and approve volunteers for activities that match their interests and availability. You can check your status any time with your registration reference and phone number.' },
-    { q: 'How will I receive updates?', a: 'By the contact method you choose: WhatsApp, text message, phone call or email. Approved volunteers with an email address can also sign in to their volunteer account to see announcements and opportunities.' },
-    { q: 'How is my information protected?', a: 'Your details are used only to organise the volunteer programme. Access is limited to authorised staff, every administrative action is logged, and we never sell your information. You can ask us to correct or delete your record at any time.' },
-    { q: 'Do I have to take part in every activity?', a: 'No. You choose the activities you are interested in, and you can update your availability and preferences whenever your circumstances change.' },
-    { q: 'I made a mistake in my application. What should I do?', a: 'Sign in to your volunteer account to update your interests, availability and contact preferences, or send a correction request. If you did not give an email address, contact the programme team with your reference.' },
+    { q: 'Who can register?', a: 'Anyone aged 18 or over with a valid voter’s card who will serve at a polling unit in Lagos State.' },
+    { q: 'Which categories can I register for?', a: 'Agent, Canvasser, Mobilizer or PU Agent. Choose the one you have been asked to serve as. The team may confirm or change it when reviewing your registration.' },
+    { q: 'Why do you need my voter’s card?', a: 'To confirm that you are a registered voter and to match you to your polling unit. Only authorised staff can see it.' },
+    { q: 'Does the upload check prove my card is genuine?', a: 'No. The system checks that each file is a real, complete image or PDF of a sensible size, and rejects files that are not. Staff then check the card itself. A file passing the upload checks does not mean the card has been verified.' },
+    { q: 'What if my photo is rejected?', a: 'The form tells you why: for example, the file is not a photo, is too small, or is not a portrait. Take a new photo in good light with the whole card or your face in frame, and try again.' },
+    { q: 'How do I check my registration?', a: 'Use the status page with the reference you received and the phone number you registered with.' },
+    { q: 'How do I correct or delete my registration?', a: 'Contact the registration team with your reference. They will verify that the request comes from you before making any change.' },
   ],
 };
 
 export const privacyNotice = {
-  version: '2026-10',
+  version: '2026-10-agents',
   summary: [
-    'We collect the details in this form to register you as a volunteer, contact you about the programme and organise activities.',
-    'Only authorised programme staff can see your record. Every administrative action is logged.',
-    'We keep your record while you remain a volunteer and for up to 12 months after you leave, then delete it.',
-    'You can ask to see, correct, export or delete your information at any time.',
-    'We do not sell your information or share it with third parties for marketing.',
+    'We use your details, passport photograph and voter’s card only to register and verify you as a polling unit agent and to contact you about it.',
+    'Your documents are stored securely. Only authorised registration staff can open them, and every view is logged.',
+    'Upload checks confirm each file is a genuine image or PDF. They do not prove your voter’s card is authentic: staff check that separately.',
+    'We keep your registration for the election period it was collected for and up to 12 months after, then delete it and your documents.',
+    'You can ask to see, correct or delete your information, or withdraw consent, at any time.',
   ],
 };

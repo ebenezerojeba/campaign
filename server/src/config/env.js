@@ -24,22 +24,17 @@ export const env = {
   mongoUri: process.env.MONGODB_URI || '',
   jwtSecret: JWT_SECRET.length >= 32 || !isProd ? (JWT_SECRET || 'development-only-insecure-secret-change-me-now') : '',
   adminSessionHours: Number(process.env.ADMIN_SESSION_HOURS) || 8,
-  volunteerSessionHours: Number(process.env.VOLUNTEER_SESSION_HOURS) || 24,
   frontendUrl: (process.env.FRONTEND_URL || vercelUrl || 'http://localhost:5173').replace(/\/$/, ''),
   corsOrigins: (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
   demoMode: bool(process.env.DEMO_MODE),
   resend: {
     apiKey: process.env.RESEND_API_KEY || '',
-    from: process.env.EMAIL_FROM || 'APC Lagos Volunteer Programme <onboarding@resend.dev>',
+    from: process.env.EMAIL_FROM || 'APC Lagos Agent Registration <onboarding@resend.dev>',
     replyTo: process.env.EMAIL_REPLY_TO || '',
     adminTo: process.env.ADMIN_NOTIFICATION_EMAIL || '',
   },
-  cloudinary: {
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
-    apiKey: process.env.CLOUDINARY_API_KEY || '',
-    apiSecret: process.env.CLOUDINARY_API_SECRET || '',
-    folder: process.env.CLOUDINARY_FOLDER || 'apc-lagos-volunteers',
-  },
+  // Encrypts NIN values when that field is switched on (shared/agentForm.js).
+  dataEncryptionKey: process.env.DATA_ENCRYPTION_KEY || '',
   contact: {
     email: process.env.PUBLIC_CONTACT_EMAIL || '',
     phone: process.env.PUBLIC_CONTACT_PHONE || '',
@@ -49,4 +44,3 @@ export const env = {
 };
 
 export const emailConfigured = () => Boolean(env.resend.apiKey);
-export const cloudinaryConfigured = () => Boolean(env.cloudinary.cloudName && env.cloudinary.apiKey && env.cloudinary.apiSecret);

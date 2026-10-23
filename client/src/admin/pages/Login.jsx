@@ -43,12 +43,12 @@ export default function Login() {
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">
           <span className="flex size-12 items-center justify-center rounded-xl bg-mist text-forest-900"><Lock className="size-6" aria-hidden /></span>
           <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-forest-900">Staff sign in</h1>
-          <p className="mt-2 text-[15px] text-slate-500">For authorised programme administrators and reviewers. Accounts are created by an administrator.</p>
+          <p className="mt-2 text-[15px] text-slate-500">For authorised registration administrators and reviewers. Accounts are created by an administrator.</p>
 
           {params.get('expired') && <Alert tone="info" className="mt-6">Your session ended. Sign in again to continue.</Alert>}
           {dbMissing && (
             <Alert tone="warning" className="mt-6" title="Database not connected" action={<ButtonLink to="/admin/preview" size="sm" variant="secondary" icon={Eye}>Open the demonstration preview</ButtonLink>}>
-              Staff sign-in needs the programme database. You can explore the dashboard with fictional sample data in the meantime.
+              Staff sign-in needs the registration database. You can explore the dashboard with fictional sample data in the meantime.
             </Alert>
           )}
 

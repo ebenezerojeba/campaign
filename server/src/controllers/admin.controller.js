@@ -1,14 +1,16 @@
-import { Volunteer } from '../models/Volunteer.js';
-import { Opportunity } from '../models/Opportunity.js';
+import mongoose from 'mongoose';
+import { Agent } from '../models/Agent.js';
 import { User } from '../models/User.js';
-import { Announcement, AuditLog, DataRequest } from '../models/misc.js';
+import { AuditLog } from '../models/misc.js';
 import { ApiError, send } from '../utils/ApiError.js';
 import { toCsv } from '../utils/csv.js';
+import { decryptField } from '../utils/secure.js';
 import { audit } from '../services/audit.js';
 import { sendDecisionEmail } from '../services/email.js';
+import { openDocument, deleteDocuments } from '../services/documents.js';
 import { issueStaffSession, clearSession, readStaffToken, STAFF_COOKIE } from '../middleware/index.js';
 import { normalisePhone, POLLING_UNIT_CODE_RE } from '../../../shared/schemas.js';
-import { labelFor, AGENT_TYPES, INTERESTS, SKILLS, AVAILABILITY, CONTACT_METHODS, PARTICIPATION_FORMATS } from '../../../shared/options.js';
+import { labelFor, AGENT_CATEGORIES, DOCUMENT_KINDS } from '../../../shared/options.js';
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -63,23 +65,21 @@ export async function me(req, res) {
 
 // ---------- Dashboard ----------
 
-export async function dashboard(req, res) {
+export async function dashboard(_req, res) {
   const since = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000);
   since.setHours(0, 0, 0, 0);
 
-  const [byStatus, trend, byLga, byInterest, recent, publishedOpportunities, openRequests, sampleCount] = await Promise.all([
-    Volunteer.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
-    Volunteer.aggregate([
+  const [byStatus, trend, byLga, byCategory, recent, sampleCount] = await Promise.all([
+    Agent.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
+    Agent.aggregate([
       { $match: { createdAt: { $gte: since } } },
       { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Africa/Lagos' } }, n: { $sum: 1 } } },
       { $sort: { _id: 1 } },
     ]),
-    Volunteer.aggregate([{ $group: { _id: '$lga', total: { $sum: 1 }, approved: { $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] } } } }, { $sort: { total: -1 } }]),
-    Volunteer.aggregate([{ $unwind: '$interests' }, { $group: { _id: '$interests', n: { $sum: 1 } } }, { $sort: { n: -1 } }]),
-    Volunteer.find().sort({ createdAt: -1 }).limit(6).select('reference firstName lastName lga status createdAt isSample').lean(),
-    Opportunity.countDocuments({ status: 'published' }),
-    DataRequest.countDocuments({ status: 'open' }),
-    Volunteer.countDocuments({ isSample: true }),
+    Agent.aggregate([{ $group: { _id: '$lga', total: { $sum: 1 }, approved: { $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] } } } }, { $sort: { total: -1 } }]),
+    Agent.aggregate([{ $group: { _id: '$agentCategory', n: { $sum: 1 } } }, { $sort: { n: -1 } }]),
+    Agent.find().sort({ createdAt: -1 }).limit(6).select('reference firstName lastName agentCategory lga status createdAt isSample').lean(),
+    Agent.countDocuments({ isSample: true }),
   ]);
 
   // Fill missing days so the chart has a continuous 30-day axis.
@@ -100,27 +100,24 @@ export async function dashboard(req, res) {
     },
     trend: days,
     byLga: byLga.map((l) => ({ lga: l._id, total: l.total, approved: l.approved })),
-    byInterest: byInterest.map((i) => ({ interest: i._id, label: labelFor(INTERESTS, i._id), count: i.n })),
+    byCategory: byCategory.map((c) => ({ category: c._id, label: labelFor(AGENT_CATEGORIES, c._id), count: c.n })),
     recent,
-    publishedOpportunities,
-    openRequests,
     sampleCount,
   });
 }
 
-// ---------- Volunteers ----------
+// ---------- Registrations ----------
 
-function buildVolunteerFilter(q) {
+function buildAgentFilter(q) {
   const filter = {};
   if (q.status) filter.status = q.status;
+  if (q.agentCategory) filter.agentCategory = q.agentCategory;
   if (q.lga) filter.lga = q.lga;
-  if (q.interest) filter.interests = q.interest;
-  if (q.agentType) filter.agentType = q.agentType === 'none' ? { $exists: false } : q.agentType;
-  if (q.stateOfOrigin) filter.stateOfOrigin = q.stateOfOrigin;
-  if (q.lgaOfOrigin) filter.lgaOfOrigin = q.lgaOfOrigin;
-  if (q.senatorialDistrict) filter.senatorialDistrict = q.senatorialDistrict;
   if (q.wardCode) filter.wardCode = q.wardCode;
   if (q.pollingUnitCode) filter.pollingUnitCode = q.pollingUnitCode;
+  if (q.senatorialDistrict) filter.senatorialDistrict = q.senatorialDistrict;
+  if (q.stateOfOrigin) filter.stateOfOrigin = q.stateOfOrigin;
+  if (q.lgaOfOrigin) filter.lgaOfOrigin = q.lgaOfOrigin;
   if (q.sample === 'real') filter.isSample = false;
   if (q.sample === 'sample') filter.isSample = true;
   if (q.from || q.to) {
@@ -137,229 +134,166 @@ function buildVolunteerFilter(q) {
     else if (term.includes('@')) filter.email = term.toLowerCase();
     else {
       const parts = term.split(/\s+/).slice(0, 3).map((p) => new RegExp(`^${escapeRegex(p)}`, 'i'));
-      filter.$and = parts.map((rx) => ({ $or: [{ firstName: rx }, { lastName: rx }] }));
+      filter.$and = parts.map((rx) => ({ $or: [{ firstName: rx }, { middleName: rx }, { lastName: rx }] }));
     }
   }
   return filter;
 }
 
-const LIST_FIELDS = 'reference firstName lastName phone email agentType lga lcda ward wardCode pollingUnitCode interests status createdAt isSample';
+const LIST_FIELDS = 'reference firstName middleName lastName phone email agentCategory lga ward wardCode pollingUnit pollingUnitCode status createdAt isSample';
 
-export async function listVolunteers(req, res) {
+export async function listAgents(req, res) {
   const q = req.validatedQuery;
-  const filter = buildVolunteerFilter(q);
+  const filter = buildAgentFilter(q);
   const sort = { newest: { createdAt: -1 }, oldest: { createdAt: 1 }, name: { lastName: 1, firstName: 1 } }[q.sort];
   const [items, total] = await Promise.all([
-    Volunteer.find(filter).select(LIST_FIELDS).sort(sort).skip((q.page - 1) * q.limit).limit(q.limit).lean(),
-    Volunteer.countDocuments(filter),
+    Agent.find(filter).select(LIST_FIELDS).sort(sort).skip((q.page - 1) * q.limit).limit(q.limit).lean(),
+    Agent.countDocuments(filter),
   ]);
   send(res, items, { page: q.page, limit: q.limit, total, pages: Math.max(1, Math.ceil(total / q.limit)) });
 }
 
-export async function getVolunteer(req, res) {
-  const v = await Volunteer.findById(req.params.id).populate('assignments.opportunity', 'title status startDate').lean();
-  if (!v) throw ApiError.notFound('This volunteer record does not exist');
-  const auditTrail = await AuditLog.find({ targetType: 'Volunteer', targetId: String(v._id) }).sort({ createdAt: -1 }).limit(50).lean();
-  await audit(req, { action: 'volunteer.viewed', targetType: 'Volunteer', targetId: v._id, summary: `Viewed ${v.reference}` });
-  send(res, { ...v, auditTrail });
+// File ids and hashes stay on the server; the dashboard asks for documents by kind.
+const publicDocuments = (documents = {}) => Object.fromEntries(
+  Object.entries(documents).filter(([, d]) => d?.fileId).map(([kind, d]) => [kind, { contentType: d.contentType, bytes: d.bytes, width: d.width, height: d.height, uploadedAt: d.uploadedAt }]),
+);
+
+export async function getAgent(req, res) {
+  const a = await Agent.findById(req.params.id).lean();
+  if (!a) throw ApiError.notFound('This registration does not exist');
+  const auditTrail = await AuditLog.find({ targetType: 'Agent', targetId: String(a._id) }).sort({ createdAt: -1 }).limit(50).lean();
+  await audit(req, { action: 'agent.viewed', targetType: 'Agent', targetId: a._id, summary: `Viewed ${a.reference}` });
+  send(res, { ...a, nin: a.nin?.last4 ? { last4: a.nin.last4 } : undefined, documents: publicDocuments(a.documents), auditTrail });
 }
 
-export async function updateVolunteerStatus(req, res) {
-  const { status, reason, notify } = req.body;
-  const v = await Volunteer.findById(req.params.id);
-  if (!v) throw ApiError.notFound('This volunteer record does not exist');
-  if (v.status === status) throw ApiError.conflict(`This application is already ${status}`);
+// Full NIN on request only, and every reveal is logged.
+export async function revealNin(req, res) {
+  const a = await Agent.findById(req.params.id).select('+nin.encrypted reference').lean();
+  if (!a?.nin?.encrypted) throw ApiError.notFound('No NIN is recorded for this registration');
+  await audit(req, { action: 'agent.nin_revealed', targetType: 'Agent', targetId: a._id, summary: `Revealed NIN for ${a.reference}` });
+  send(res, { nin: decryptField(a.nin.encrypted) });
+}
 
-  const from = v.status;
-  v.status = status;
-  v.reviewedAt = new Date();
-  v.statusHistory.push({ from, to: status, reason, by: req.user._id, byName: req.user.name, at: new Date() });
-  await v.save();
-  await audit(req, { action: 'volunteer.status_changed', targetType: 'Volunteer', targetId: v._id, summary: `${v.reference}: ${from} → ${status}`, meta: { from, to: status, reason } });
+const DOC_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
+
+// Streams one uploaded document to an authorised staff member. Images open
+// inline; PDFs download, so no PDF is rendered inside the dashboard origin.
+export async function getAgentDocument(req, res) {
+  const { kind } = req.params;
+  if (!DOCUMENT_KINDS.some((k) => k.value === kind)) throw ApiError.notFound();
+  const a = await Agent.findById(req.params.id).select(`reference documents.${kind}`).lean();
+  const d = a?.documents?.[kind];
+  if (!d?.fileId) throw ApiError.notFound('This document is not on file');
+  await audit(req, { action: 'agent.document_viewed', targetType: 'Agent', targetId: a._id, summary: `Opened ${labelFor(DOCUMENT_KINDS, kind).toLowerCase()} for ${a.reference}` });
+
+  const disposition = d.contentType === 'application/pdf' ? 'attachment' : 'inline';
+  res.setHeader('Content-Type', d.contentType);
+  res.setHeader('Content-Disposition', `${disposition}; filename="${a.reference}-${kind}.${DOC_EXT[d.contentType] ?? 'bin'}"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  openDocument(new mongoose.Types.ObjectId(d.fileId))
+    .on('error', (err) => {
+      console.error('[documents] read failed', err.message);
+      if (!res.headersSent) res.status(404).end(); else res.destroy();
+    })
+    .pipe(res);
+}
+
+export async function updateAgentStatus(req, res) {
+  const { status, reason, notify } = req.body;
+  const a = await Agent.findById(req.params.id);
+  if (!a) throw ApiError.notFound('This registration does not exist');
+  if (a.status === status) throw ApiError.conflict(`This registration is already ${status}`);
+
+  const from = a.status;
+  a.status = status;
+  a.reviewedAt = new Date();
+  a.statusHistory.push({ from, to: status, reason, by: req.user._id, byName: req.user.name, at: new Date() });
+  await a.save();
+  await audit(req, { action: 'agent.status_changed', targetType: 'Agent', targetId: a._id, summary: `${a.reference}: ${from} → ${status}`, meta: { from, to: status, reason } });
 
   let notification = null;
-  if (notify && status !== 'pending' && !v.isSample) {
-    notification = await sendDecisionEmail(v);
-    await Volunteer.updateOne({ _id: v._id }, { $push: { notifications: notification } });
+  if (notify && status !== 'pending' && !a.isSample) {
+    notification = await sendDecisionEmail(a);
+    await Agent.updateOne({ _id: a._id }, { $push: { notifications: notification } });
   }
-  send(res, { status: v.status, statusHistory: v.statusHistory, reviewedAt: v.reviewedAt, notification });
+  send(res, { status: a.status, statusHistory: a.statusHistory, reviewedAt: a.reviewedAt, notification });
 }
 
-export async function addVolunteerNote(req, res) {
-  const v = await Volunteer.findByIdAndUpdate(
+export async function addAgentNote(req, res) {
+  const a = await Agent.findByIdAndUpdate(
     req.params.id,
     { $push: { notes: { body: req.body.body, author: req.user._id, authorName: req.user.name } } },
     { new: true, projection: { notes: 1, reference: 1 } },
   );
-  if (!v) throw ApiError.notFound('This volunteer record does not exist');
-  await audit(req, { action: 'volunteer.note_added', targetType: 'Volunteer', targetId: v._id, summary: `Note added to ${v.reference}` });
-  send(res, v.notes, undefined, 201);
+  if (!a) throw ApiError.notFound('This registration does not exist');
+  await audit(req, { action: 'agent.note_added', targetType: 'Agent', targetId: a._id, summary: `Note added to ${a.reference}` });
+  send(res, a.notes, undefined, 201);
 }
 
-export async function setAssignment(req, res) {
-  const { opportunityId, status } = req.body;
-  const [v, opp] = await Promise.all([Volunteer.findById(req.params.id), Opportunity.findById(opportunityId)]);
-  if (!v) throw ApiError.notFound('This volunteer record does not exist');
-  if (!opp) throw ApiError.notFound('This opportunity does not exist');
-  if (v.status !== 'approved' && status === 'assigned') throw ApiError.conflict('Approve the application before assigning activities');
-  const existing = v.assignments.find((a) => String(a.opportunity) === String(opp._id));
-  if (existing) { existing.status = status; existing.at = new Date(); } else v.assignments.push({ opportunity: opp._id, status });
-  await v.save();
-  await audit(req, { action: 'volunteer.assignment', targetType: 'Volunteer', targetId: v._id, summary: `${v.reference} ${status} for "${opp.title}"` });
-  send(res, v.assignments);
+// Erasure (for example, an applicant's deletion request received by email):
+// removes the record and every uploaded document. The audit entry keeps only the reference.
+export async function deleteAgent(req, res) {
+  const a = await Agent.findById(req.params.id).select('reference documents').lean();
+  if (!a) throw ApiError.notFound('This registration does not exist');
+  // Typing the reference confirms a permanent deletion.
+  if (a.reference !== req.body.confirmReference) throw ApiError.badRequest('Type the registration reference exactly to confirm deletion');
+  await deleteDocuments(Object.values(a.documents ?? {}).map((d) => d?.fileId));
+  await Agent.deleteOne({ _id: a._id });
+  await audit(req, { action: 'agent.deleted', targetType: 'Agent', targetId: a._id, summary: `Deleted ${a.reference} and its documents`, meta: { reason: req.body.reason } });
+  send(res, { deleted: true });
 }
 
+const onFile = (a, kind) => (a.documents?.[kind]?.fileId ? 'on file' : '');
+
+// Documents and NIN are never exported: the CSV says only whether each is on file.
 const EXPORT_COLUMNS = [
-  { label: 'Reference', get: (v) => v.reference },
-  { label: 'Sample record', get: (v) => (v.isSample ? 'yes' : 'no') },
-  { label: 'Status', get: (v) => v.status },
-  { label: 'First name', get: (v) => v.firstName },
-  { label: 'Last name', get: (v) => v.lastName },
-  { label: 'Phone', get: (v) => (v.phone?.startsWith('+234') ? `0${v.phone.slice(4)}` : v.phone) },
-  { label: 'Email', get: (v) => v.email },
-  { label: 'Preferred contact', get: (v) => labelFor(CONTACT_METHODS, v.contactMethod) },
-  { label: 'Agent type', get: (v) => (v.agentType ? labelFor(AGENT_TYPES, v.agentType) : '') },
-  { label: 'State of origin', get: (v) => v.stateOfOrigin },
-  { label: 'LGA of origin', get: (v) => v.lgaOfOrigin },
-  { label: 'State of residence', get: (v) => v.state },
-  { label: 'LGA of residence', get: (v) => v.lga },
-  { label: 'LCDA', get: (v) => v.lcda },
-  { label: 'Senatorial district', get: (v) => v.senatorialDistrict },
-  { label: 'Ward', get: (v) => v.ward },
-  { label: 'Ward code', get: (v) => v.wardCode },
-  { label: 'Polling unit', get: (v) => v.pollingUnit },
-  { label: 'Polling unit code', get: (v) => v.pollingUnitCode },
-  { label: 'Community', get: (v) => v.community },
-  { label: 'Interests', get: (v) => v.interests.map((i) => labelFor(INTERESTS, i)) },
-  { label: 'Skills', get: (v) => v.skills.map((i) => labelFor(SKILLS, i)) },
-  { label: 'Availability', get: (v) => v.availability.map((i) => labelFor(AVAILABILITY, i)) },
-  { label: 'Participation', get: (v) => labelFor(PARTICIPATION_FORMATS, v.participationFormat) },
-  { label: 'Consents to communications', get: (v) => (v.consent?.communications ? 'yes' : 'no') },
-  { label: 'Registered at', get: (v) => v.createdAt },
+  { label: 'Reference', get: (a) => a.reference },
+  { label: 'Sample record', get: (a) => (a.isSample ? 'yes' : 'no') },
+  { label: 'Status', get: (a) => a.status },
+  { label: 'Agent category', get: (a) => labelFor(AGENT_CATEGORIES, a.agentCategory) },
+  { label: 'First name', get: (a) => a.firstName },
+  { label: 'Middle name', get: (a) => a.middleName },
+  { label: 'Last name', get: (a) => a.lastName },
+  { label: 'Phone', get: (a) => (a.phone?.startsWith('+234') ? `0${a.phone.slice(4)}` : a.phone) },
+  { label: 'Email', get: (a) => a.email },
+  { label: 'State of origin', get: (a) => a.stateOfOrigin },
+  { label: 'LGA of origin', get: (a) => a.lgaOfOrigin },
+  { label: 'LGA', get: (a) => a.lga },
+  { label: 'Senatorial district', get: (a) => a.senatorialDistrict },
+  { label: 'Ward', get: (a) => a.ward },
+  { label: 'Ward code', get: (a) => a.wardCode },
+  { label: 'Polling unit', get: (a) => a.pollingUnit },
+  { label: 'Polling unit code', get: (a) => a.pollingUnitCode },
+  { label: 'Passport photograph', get: (a) => onFile(a, 'passport') },
+  { label: "Voter's card", get: (a) => onFile(a, 'pvc') },
+  { label: 'Registered at', get: (a) => a.createdAt },
 ];
 
-export async function exportVolunteers(req, res) {
+export async function exportAgents(req, res) {
   const q = req.validatedQuery;
-  const filter = buildVolunteerFilter(q);
-  const rows = await Volunteer.find(filter).sort({ createdAt: -1 }).limit(20000).lean();
-  await audit(req, { action: 'volunteer.exported', targetType: 'Volunteer', summary: `Exported ${rows.length} records`, meta: { filter: q } });
+  const filter = buildAgentFilter(q);
+  const rows = await Agent.find(filter).sort({ createdAt: -1 }).limit(20000).lean();
+  await audit(req, { action: 'agent.exported', targetType: 'Agent', summary: `Exported ${rows.length} records`, meta: { filter: q } });
   const stamp = new Date().toISOString().slice(0, 10);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="apc-lagos-volunteers-${stamp}.csv"`);
+  res.setHeader('Content-Disposition', `attachment; filename="apc-lagos-pu-agents-${stamp}.csv"`);
   res.setHeader('Cache-Control', 'no-store');
   res.send(`﻿${toCsv(EXPORT_COLUMNS, rows)}`);
 }
 
-// ---------- Opportunities ----------
-
-export async function listAdminOpportunities(req, res) {
-  const { status } = req.validatedQuery;
-  const filter = status ? { status } : { status: { $ne: 'archived' } };
-  const items = await Opportunity.find(filter).sort({ updatedAt: -1 }).lean();
-  const counts = await Volunteer.aggregate([
-    { $unwind: '$assignments' },
-    { $match: { 'assignments.opportunity': { $in: items.map((i) => i._id) } } },
-    { $group: { _id: { opp: '$assignments.opportunity', status: '$assignments.status' }, n: { $sum: 1 } } },
-  ]);
-  const tally = (id, s) => counts.find((c) => String(c._id.opp) === String(id) && c._id.status === s)?.n ?? 0;
-  send(res, items.map((i) => ({ ...i, interested: tally(i._id, 'interested'), assigned: tally(i._id, 'assigned') })));
-}
-
-export async function getAdminOpportunity(req, res) {
-  const item = await Opportunity.findById(req.params.id).lean();
-  if (!item) throw ApiError.notFound('This opportunity does not exist');
-  const volunteers = await Volunteer.find({ 'assignments.opportunity': item._id })
-    .select('reference firstName lastName lga status assignments isSample').lean();
-  send(res, {
-    ...item,
-    volunteers: volunteers.map((v) => ({ ...v, assignment: v.assignments.find((a) => String(a.opportunity) === String(item._id)), assignments: undefined })),
-  });
-}
-
-function applyPublishState(doc, status) {
-  if (status === 'published' && !doc.publishedAt) doc.publishedAt = new Date();
-}
-
-export async function createOpportunity(req, res) {
-  const doc = new Opportunity({ ...req.body, createdBy: req.user._id });
-  applyPublishState(doc, doc.status);
-  await doc.save();
-  await audit(req, { action: 'opportunity.created', targetType: 'Opportunity', targetId: doc._id, summary: `Created "${doc.title}" (${doc.status})` });
-  send(res, doc, undefined, 201);
-}
-
-export async function updateOpportunity(req, res) {
-  const doc = await Opportunity.findById(req.params.id);
-  if (!doc) throw ApiError.notFound('This opportunity does not exist');
-  const before = doc.status;
-  doc.set(req.body);
-  applyPublishState(doc, doc.status);
-  await doc.save();
-  const action = before !== doc.status ? `opportunity.${doc.status}` : 'opportunity.updated';
-  await audit(req, { action, targetType: 'Opportunity', targetId: doc._id, summary: `${before !== doc.status ? `${before} → ${doc.status}` : 'Edited'}: "${doc.title}"` });
-  send(res, doc);
-}
-
-// Opportunities are archived rather than deleted so assignment history survives.
-export async function archiveOpportunity(req, res) {
-  const doc = await Opportunity.findByIdAndUpdate(req.params.id, { status: 'archived' }, { new: true });
-  if (!doc) throw ApiError.notFound('This opportunity does not exist');
-  await audit(req, { action: 'opportunity.archived', targetType: 'Opportunity', targetId: doc._id, summary: `Archived "${doc.title}"` });
-  send(res, doc);
-}
-
-// ---------- Announcements ----------
-
-export async function listAnnouncements(_req, res) {
-  send(res, await Announcement.find({ status: { $ne: 'archived' } }).sort({ createdAt: -1 }).lean());
-}
-
-export async function createAnnouncement(req, res) {
-  const doc = await Announcement.create({ ...req.body, createdBy: req.user._id, publishedAt: req.body.status === 'published' ? new Date() : undefined });
-  await audit(req, { action: 'announcement.created', targetType: 'Announcement', targetId: doc._id, summary: `Created "${doc.title}" (${doc.status})` });
-  send(res, doc, undefined, 201);
-}
-
-export async function updateAnnouncement(req, res) {
-  const doc = await Announcement.findById(req.params.id);
-  if (!doc) throw ApiError.notFound('This announcement does not exist');
-  doc.set(req.body);
-  if (doc.status === 'published' && !doc.publishedAt) doc.publishedAt = new Date();
-  await doc.save();
-  await audit(req, { action: 'announcement.updated', targetType: 'Announcement', targetId: doc._id, summary: `Updated "${doc.title}" (${doc.status})` });
-  send(res, doc);
-}
-
-// ---------- Audit, data requests, staff ----------
+// ---------- Audit and staff ----------
 
 export async function listAudit(req, res) {
   const { page, limit } = req.validatedQuery;
+  const filter = { action: { $nin: ['agent.viewed', 'agent.document_viewed'] } };
   const [items, total] = await Promise.all([
-    AuditLog.find({ action: { $ne: 'volunteer.viewed' } }).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
-    AuditLog.countDocuments({ action: { $ne: 'volunteer.viewed' } }),
+    AuditLog.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    AuditLog.countDocuments(filter),
   ]);
   send(res, items, { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) });
-}
-
-export async function listDataRequests(_req, res) {
-  send(res, await DataRequest.find().sort({ status: 1, createdAt: -1 }).limit(200).populate('volunteer', 'firstName lastName reference').lean());
-}
-
-export async function resolveDataRequest(req, res) {
-  const request = await DataRequest.findById(req.params.id);
-  if (!request) throw ApiError.notFound('This request does not exist');
-  if (request.status !== 'open') throw ApiError.conflict('This request has already been resolved');
-  const { status, resolution } = req.body;
-
-  // Completing a deletion request erases the personal record.
-  if (status === 'completed' && request.type === 'deletion' && request.volunteer) {
-    await Volunteer.deleteOne({ _id: request.volunteer });
-    request.volunteer = undefined;
-  }
-  Object.assign(request, { status, resolution, resolvedBy: req.user._id, resolvedAt: new Date() });
-  await request.save();
-  await audit(req, { action: `data_request.${status}`, targetType: 'DataRequest', targetId: request._id, summary: `${request.type} request for ${request.reference} ${status}` });
-  send(res, request);
 }
 
 export async function listStaff(_req, res) {
@@ -388,4 +322,3 @@ export async function updateStaff(req, res) {
   await audit(req, { action: 'staff.updated', targetType: 'User', targetId: user._id, summary: `${user.email}: role ${user.role}, ${user.active ? 'active' : 'deactivated'}` });
   send(res, { ...user.toSafeJSON(), active: user.active });
 }
-

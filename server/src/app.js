@@ -3,7 +3,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
-import { publicRouter, portalRouter, adminRouter } from './routes/index.js';
+import { publicRouter, adminRouter } from './routes/index.js';
 import { sanitizeBody, notFound, errorHandler, limits } from './middleware/index.js';
 
 export function createApp() {
@@ -38,7 +38,6 @@ export function createApp() {
   app.use('/api', limits.api);
 
   app.use('/api', publicRouter);
-  app.use('/api/portal', portalRouter);
   app.use('/api/admin', adminRouter);
 
   app.use('/api', notFound);

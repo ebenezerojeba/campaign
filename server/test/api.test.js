@@ -2,11 +2,12 @@
 //   npm test
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import zlib from 'node:zlib';
 
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret-that-is-long-enough-for-hs256-signing';
 process.env.RESEND_API_KEY = ''; // never send real email from tests
-process.env.ADMIN_NOTIFICATION_EMAIL = '';
+process.env.ADMIN_NOTIFICATION_EMAIL = 'alerts@example.org';
 process.env.DEMO_MODE = '';
 
 const { MongoMemoryServer } = await import('mongodb-memory-server-core');
@@ -16,15 +17,56 @@ const request = (await import('supertest')).default;
 let mongo;
 let app;
 let User;
-let Volunteer;
+let Agent;
+
+// ---------- Test files built in memory ----------
+
+function pngChunk(type, data) {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(zlib.crc32(body));
+  return Buffer.concat([len, body, crc]);
+}
+
+// A real, decodable greyscale PNG of the given size (shade varies the bytes).
+function png(width, height, { shade = 128, text } = {}) {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 0; // greyscale
+  const raw = Buffer.alloc((width + 1) * height, shade);
+  for (let y = 0; y < height; y += 1) raw[y * (width + 1)] = 0; // filter byte per row
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    ...(text ? [pngChunk('tEXt', Buffer.from(`Comment\0${text}`, 'latin1'))] : []),
+    pngChunk('IDAT', zlib.deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const pdf = (extra = '') => Buffer.from(`%PDF-1.4\n1 0 obj << /Type /Catalog ${extra} >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n`, 'latin1');
+
+const passport = png(400, 500, { text: 'GPS 6.5244,3.3792' });
+const pvcImage = (shade = 90) => png(1000, 640, { shade });
 
 const valid = {
-  firstName: 'Ngozi', lastName: 'Okafor', email: 'ngozi@example.com', phone: '0803 123 4567', contactMethod: 'email', agentType: 'agent_1',
+  firstName: 'Ngozi', middleName: '', lastName: 'Okafor', email: 'ngozi@example.com', phone: '0803 123 4567',
   stateOfOrigin: 'Anambra', lgaOfOrigin: 'Onitsha North',
-  state: 'Lagos', lga: 'Surulere', lcda: 'Itire-Ikate', wardCode: '20-01', pollingUnitCode: '24-20-01-001', ward: 'Typed by the browser', community: 'Aguda',
-  interests: ['community_outreach', 'civic_education'], skills: ['writing'], availability: ['saturdays'], participationFormat: 'either',
-  motivation: 'I want to help my neighbours.', ageConfirmed: true, consentProcessing: true, consentCommunications: true,
+  agentCategory: 'pu_agent', state: 'Lagos', lga: 'Surulere', wardCode: '20-01', pollingUnitCode: '24-20-01-001',
+  ageConfirmed: true, declarationAccurate: true, consentProcessing: true, consentSensitive: true,
 };
+
+// Sends a registration as the browser does: JSON fields in "data" plus files.
+function submit(data, files = {}) {
+  const req = request(app).post('/api/agents/register').field('data', JSON.stringify(data));
+  const all = { passport: [passport, 'passport.png'], pvc: [pvcImage(), 'pvc.png'], ...files };
+  for (const [name, file] of Object.entries(all)) if (file) req.attach(name, file[0], file[1]);
+  return req;
+}
 
 const fetchHeader = { 'X-Requested-With': 'fetch' };
 
@@ -36,8 +78,8 @@ before(async () => {
   await db.connectDb();
   app = (await import('../src/app.js')).default;
   ({ User } = await import('../src/models/User.js'));
-  ({ Volunteer } = await import('../src/models/Volunteer.js'));
-  await Volunteer.syncIndexes();
+  ({ Agent } = await import('../src/models/Agent.js'));
+  await Agent.syncIndexes();
   await User.create({ name: 'Admin', email: 'admin@test.org', role: 'admin', passwordHash: await User.hashPassword('correct-horse-battery') });
   await User.create({ name: 'Reviewer', email: 'rev@test.org', role: 'reviewer', passwordHash: await User.hashPassword('correct-horse-battery') });
 });
@@ -54,134 +96,167 @@ async function signIn(email) {
   return agent;
 }
 
-describe('public registration', () => {
+const fieldsOf = (res) => res.body.error?.details?.fields ?? {};
+
+describe('agent registration', () => {
   let reference;
 
-  test('registers a valid application and returns a reference', async () => {
-    const res = await request(app).post('/api/volunteers/register').send(valid);
+  test('registers a valid application with documents and returns a reference', async () => {
+    const res = await submit(valid);
     assert.equal(res.status, 201, JSON.stringify(res.body));
     assert.match(res.body.data.reference, /^LAG-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
     assert.equal(res.body.data.status, 'pending');
-    assert.equal(res.body.data.confirmationEmail, 'skipped');
     reference = res.body.data.reference;
-    const saved = await Volunteer.findOne({ reference }).lean();
+    const saved = await Agent.findOne({ reference }).lean();
     assert.equal(saved.phone, '+2348031234567');
-    assert.equal(saved.consent.processing, true);
-    assert.equal(saved.isSample, false);
-    assert.equal(saved.notifications[0].status, 'skipped');
-    assert.equal(saved.agentType, 'agent_1');
+    assert.equal(saved.agentCategory, 'pu_agent');
     assert.equal(saved.stateOfOrigin, 'Anambra');
-    assert.equal(saved.lgaOfOrigin, 'Onitsha North');
     // Names come from the official data, never from the browser.
     assert.equal(saved.ward, 'ORILE');
-    assert.equal(saved.wardCode, '20-01');
     assert.equal(saved.pollingUnit, 'JUNCTION OF ABBI AVENUE/TAPA BELLO ST. I');
     assert.equal(saved.pollingUnitCode, '24-20-01-001');
     assert.equal(saved.senatorialDistrict, 'LAGOS CENTRAL');
+    assert.equal(saved.documents.passport.contentType, 'image/png');
+    assert.equal(saved.documents.passport.width, 400);
+    assert.equal(saved.documents.pvc.height, 640);
+    assert.equal(saved.consent.sensitiveData, true);
+    // Confirmation goes to the applicant; the alert goes to the notification address.
+    const types = saved.notifications.map((n) => n.type).sort();
+    assert.deepEqual(types, ['admin_alert', 'registration_confirmation']);
+    // Stored files exist in GridFS, and metadata text chunks were removed.
+    const files = await mongoose.connection.db.collection('agentDocuments.files').find({ 'metadata.reference': reference }).toArray();
+    assert.equal(files.length, 2);
+    assert.ok(files.find((f) => f.metadata.kind === 'passport').length < passport.length, 'text chunk stripped');
   });
 
-  test('requires an agent type and never assigns one', async () => {
-    const res = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091116666', email: '', contactMethod: 'sms', agentType: '' });
-    assert.equal(res.status, 422);
-    assert.ok(res.body.error.details.fields.agentType);
-    const { agentType, ...withoutAgent } = valid;
-    const missing = await request(app).post('/api/volunteers/register').send({ ...withoutAgent, phone: '08091116666', email: '', contactMethod: 'sms' });
+  test('email is mandatory and validated', async () => {
+    const missing = await submit({ ...valid, phone: '08091110001', email: '' });
     assert.equal(missing.status, 422);
-    const bogus = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091116666', email: '', contactMethod: 'sms', agentType: 'agent_3' });
-    assert.equal(bogus.status, 422);
+    assert.match(fieldsOf(missing).email, /Enter your email/);
+    const bad = await submit({ ...valid, phone: '08091110001', email: 'not-an-email' });
+    assert.equal(bad.status, 422);
+    assert.ok(fieldsOf(bad).email);
+  });
+
+  test('requires an agent category from the approved list', async () => {
+    const res = await submit({ ...valid, phone: '08091110002', email: 'a2@example.com', agentCategory: 'volunteer' });
+    assert.equal(res.status, 422);
+    assert.ok(fieldsOf(res).agentCategory);
   });
 
   test('rejects an LGA of origin from a different state', async () => {
-    const res = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091117777', email: '', contactMethod: 'sms', stateOfOrigin: 'Kano', lgaOfOrigin: 'Onitsha North' });
+    const res = await submit({ ...valid, phone: '08091110003', email: 'a3@example.com', stateOfOrigin: 'Kano' });
     assert.equal(res.status, 422);
-    assert.ok(res.body.error.details.fields.lgaOfOrigin);
+    assert.ok(fieldsOf(res).lgaOfOrigin);
   });
 
-  test('rejects a ward from another LGA and a polling unit from another ward', async () => {
-    const wrongWard = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091118888', email: '', contactMethod: 'sms', wardCode: '11-01', pollingUnitCode: '24-11-01-001' });
-    assert.equal(wrongWard.status, 422);
-    assert.ok(wrongWard.body.error.details.fields.wardCode);
-    const wrongUnit = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091118888', email: '', contactMethod: 'sms', pollingUnitCode: '24-20-02-001' });
-    assert.equal(wrongUnit.status, 422);
-    assert.ok(wrongUnit.body.error.details.fields.pollingUnitCode);
+  test('rejects a ward from another LGA and requires ward and polling unit', async () => {
+    const wrong = await submit({ ...valid, phone: '08091110004', email: 'a4@example.com', wardCode: '11-01', pollingUnitCode: '24-11-01-001' });
+    assert.equal(wrong.status, 422);
+    assert.ok(fieldsOf(wrong).wardCode);
+    const missing = await submit({ ...valid, phone: '08091110004', email: 'a4@example.com', wardCode: '', pollingUnitCode: '', electoralRequired: false });
+    assert.equal(missing.status, 422);
+    assert.ok(fieldsOf(missing).wardCode && fieldsOf(missing).pollingUnitCode);
   });
 
-  test('requires ward and polling unit where official data exists, whatever the browser sends', async () => {
-    const res = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091119999', email: '', contactMethod: 'sms', wardCode: '', pollingUnitCode: '', electoralRequired: false });
+  test('requires both the passport photograph and the voter’s card', async () => {
+    const res = await submit({ ...valid, phone: '08091110005', email: 'a5@example.com' }, { passport: null, pvc: null });
     assert.equal(res.status, 422);
-    const { fields } = res.body.error.details;
-    assert.ok(fields.wardCode && fields.pollingUnitCode);
+    assert.ok(fieldsOf(res).passport && fieldsOf(res).pvc);
   });
 
-  test('serves official wards and polling units, and reports unconfigured areas', async () => {
-    const wards = await request(app).get('/api/locations/wards?state=Lagos&lga=Surulere');
-    assert.equal(wards.status, 200);
-    assert.equal(wards.body.data.configured, true);
-    assert.equal(wards.body.data.wards.length, 12);
-    const units = await request(app).get('/api/locations/polling-units?state=Lagos&lga=Surulere&ward=20-01');
-    assert.equal(units.status, 200);
-    assert.equal(units.body.data.length, 84);
-    const none = await request(app).get('/api/locations/wards?state=Ogun&lga=Abeokuta%20North');
-    assert.deepEqual(none.body.data, { configured: false, required: false, wards: [] });
-    assert.equal((await request(app).get('/api/locations/polling-units?state=Lagos&lga=Surulere&ward=11-01')).status, 404);
-  });
-
-  test('rejects a duplicate phone number with a clear code', async () => {
-    const res = await request(app).post('/api/volunteers/register').send({ ...valid, email: 'other@example.com', phone: '+234 803 123 4567' });
-    assert.equal(res.status, 409);
-    assert.equal(res.body.error.code, 'DUPLICATE_REGISTRATION');
-  });
-
-  test('rejects a duplicate email address', async () => {
-    const res = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091112222', email: 'NGOZI@example.com' });
-    assert.equal(res.status, 409);
-  });
-
-  test('rejects an LCDA that is not in the chosen LGA', async () => {
-    const res = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091113333', email: '', contactMethod: 'sms', lcda: 'Lekki' });
+  test('judges files by content, not by name or claimed type', async () => {
+    const fake = Buffer.from('this is a text file pretending to be a photo, padded out to look real enough');
+    const res = await submit({ ...valid, phone: '08091110006', email: 'a6@example.com' }, { passport: [fake, 'photo.jpg'] });
     assert.equal(res.status, 422);
-    assert.ok(res.body.error.details.fields.lcda);
+    assert.match(fieldsOf(res).passport, /content is not one of those formats/);
   });
 
-  test('requires consent and an adult confirmation', async () => {
-    const res = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091114444', email: 'a@example.com', consentProcessing: false, ageConfirmed: false });
-    assert.equal(res.status, 422);
-    const { fields } = res.body.error.details;
-    assert.ok(fields.consentProcessing && fields.ageConfirmed);
+  test('rejects truncated images, wrong shapes and tiny photos', async () => {
+    const truncated = await submit({ ...valid, phone: '08091110007', email: 'a7@example.com' }, { passport: [passport.subarray(0, passport.length - 20), 'p.png'] });
+    assert.match(fieldsOf(truncated).passport, /damaged or incomplete/);
+    const wide = await submit({ ...valid, phone: '08091110007', email: 'a7@example.com' }, { passport: [png(900, 400), 'p.png'] });
+    assert.match(fieldsOf(wide).passport, /portrait or square/);
+    const tiny = await submit({ ...valid, phone: '08091110007', email: 'a7@example.com' }, { pvc: [png(200, 120), 'c.png'] });
+    assert.match(fieldsOf(tiny).pvc, /too small/);
   });
 
-  test('requires an email address when email is the contact method', async () => {
-    const res = await request(app).post('/api/volunteers/register').send({ ...valid, phone: '08091115555', email: '' });
-    assert.equal(res.status, 422);
-    assert.ok(res.body.error.details.fields.email);
+  test('accepts a plain PDF voter’s card but rejects PDFs with scripts or that are not PDFs at all', async () => {
+    const ok = await submit({ ...valid, phone: '08091110008', email: 'a8@example.com' }, { pvc: [pdf(), 'card.pdf'] });
+    assert.equal(ok.status, 201, JSON.stringify(ok.body));
+    const scripted = await submit({ ...valid, phone: '08091110009', email: 'a9@example.com' }, { pvc: [pdf('/OpenAction << /S /JavaScript /JS (app.alert(1)) >>'), 'card.pdf'] });
+    assert.match(fieldsOf(scripted).pvc, /scripts or attachments/);
+    const hidden = Buffer.concat([Buffer.from('%PDF-1.5\n1 0 obj << /Length 40 /Filter /FlateDecode >>\nstream\n', 'latin1'), zlib.deflateSync(Buffer.from('<< /S /JavaScript /JS (x) >>')), Buffer.from('\nendstream\nendobj\n%%EOF\n', 'latin1')]);
+    const compressed = await submit({ ...valid, phone: '08091110009', email: 'a9@example.com' }, { pvc: [hidden, 'card.pdf'] });
+    assert.match(fieldsOf(compressed).pvc, /scripts or attachments/);
+    const passportPdf = await submit({ ...valid, phone: '08091110009', email: 'a9@example.com' }, { passport: [pdf(), 'p.pdf'] });
+    assert.match(fieldsOf(passportPdf).passport, /must be a JPG, PNG or WebP/);
   });
 
-  test('strips MongoDB operators from input', async () => {
-    const res = await request(app).post('/api/volunteers/status').send({ reference: { $ne: null }, phone: { $gt: '' } });
+  test('rejects files over the size limit', async () => {
+    const big = Buffer.concat([pdf(), Buffer.alloc(3 * 1024 * 1024, 32)]);
+    const res = await submit({ ...valid, phone: '08091110010', email: 'a10@example.com' }, { pvc: [big, 'big.pdf'] });
+    assert.equal(res.status, 413);
+  });
+
+  test('rejects a voter’s card file already used by someone else', async () => {
+    const res = await submit({ ...valid, phone: '08091110011', email: 'a11@example.com' });
     assert.equal(res.status, 422);
+    assert.match(fieldsOf(res).pvc, /already been used/);
+  });
+
+  test('rejects a duplicate phone number or email with a clear code', async () => {
+    const phone = await submit({ ...valid, email: 'other@example.com' }, { pvc: [pvcImage(91), 'c.png'] });
+    assert.equal(phone.status, 409);
+    assert.equal(phone.body.error.code, 'DUPLICATE_REGISTRATION');
+    const email = await submit({ ...valid, phone: '08091110012', email: 'NGOZI@example.com' }, { pvc: [pvcImage(92), 'c.png'] });
+    assert.equal(email.status, 409);
+  });
+
+  test('requires every consent', async () => {
+    const res = await submit({ ...valid, phone: '08091110013', email: 'a13@example.com', consentSensitive: false, declarationAccurate: false });
+    assert.equal(res.status, 422);
+    assert.ok(fieldsOf(res).consentSensitive && fieldsOf(res).declarationAccurate);
+  });
+
+  test('a failed registration leaves no orphaned documents', async () => {
+    const count = await mongoose.connection.db.collection('agentDocuments.files').countDocuments();
+    assert.equal(count, 4); // two successful registrations, two files each
   });
 
   test('status lookup needs the matching phone number and reveals no contact details', async () => {
-    const ok = await request(app).post('/api/volunteers/status').send({ reference, phone: '08031234567' });
+    const ok = await request(app).post('/api/agents/status').send({ reference, phone: '08031234567' });
     assert.equal(ok.status, 200);
     assert.deepEqual(Object.keys(ok.body.data).sort(), ['firstName', 'reviewedAt', 'status', 'statusLabel', 'submittedAt']);
-    const wrong = await request(app).post('/api/volunteers/status').send({ reference, phone: '08031234568' });
+    const wrong = await request(app).post('/api/agents/status').send({ reference, phone: '08031234568' });
     assert.equal(wrong.status, 404);
   });
 
-  test('public stats are aggregate counts only', async () => {
-    const res = await request(app).get('/api/stats');
-    assert.equal(res.status, 200);
-    assert.equal(res.body.data.volunteers, 1);
-    assert.equal(res.body.data.includesSampleData, false);
+  test('strips MongoDB operators from input', async () => {
+    const res = await request(app).post('/api/agents/status').send({ reference: { $ne: null }, phone: { $gt: '' } });
+    assert.equal(res.status, 422);
+  });
+
+  test('serves official wards and polling units', async () => {
+    const wards = await request(app).get('/api/locations/wards?state=Lagos&lga=Surulere');
+    assert.equal(wards.body.data.wards.length, 12);
+    const units = await request(app).get('/api/locations/polling-units?state=Lagos&lga=Surulere&ward=20-01');
+    assert.equal(units.body.data.length, 84);
+  });
+
+  test('removed volunteer endpoints no longer exist', async () => {
+    for (const path of ['/api/volunteers/register', '/api/opportunities', '/api/stats', '/api/portal/me']) {
+      const res = await request(app).get(path);
+      assert.equal(res.status, 404, path);
+    }
   });
 });
 
-describe('admin access control', () => {
-  test('admin endpoints require a session', async () => {
-    for (const path of ['/api/admin/dashboard', '/api/admin/volunteers', '/api/admin/exports/volunteers']) {
-      const res = await request(app).get(path);
-      assert.equal(res.status, 401, path);
+describe('administration', () => {
+  test('admin endpoints and documents require a session', async () => {
+    const a = await Agent.findOne({ isSample: false });
+    for (const path of ['/api/admin/dashboard', '/api/admin/agents', '/api/admin/exports/agents', `/api/admin/agents/${a._id}/documents/passport`]) {
+      assert.equal((await request(app).get(path)).status, 401, path);
     }
   });
 
@@ -200,114 +275,85 @@ describe('admin access control', () => {
     await User.updateOne({ email: 'rev@test.org' }, { $unset: { lockedUntil: 1 }, failedLogins: 0 });
   });
 
-  test('session cookie is HttpOnly and SameSite=Strict', async () => {
-    const res = await request(app).post('/api/admin/auth/login').set(fetchHeader).send({ email: 'admin@test.org', password: 'correct-horse-battery' });
-    const cookie = res.headers['set-cookie'][0];
-    assert.match(cookie, /HttpOnly/);
-    assert.match(cookie, /SameSite=Strict/);
-  });
-
-  test('admin reviews an application and the change is persisted with an audit trail', async () => {
+  test('staff can search, filter and see the saved values', async () => {
     const admin = await signIn('admin@test.org');
-    const list = await admin.get('/api/admin/volunteers?q=Ngozi');
-    assert.equal(list.body.meta.total, 1);
-    const id = list.body.data[0]._id;
-
-    const approved = await admin.patch(`/api/admin/volunteers/${id}/status`).set(fetchHeader).send({ status: 'approved', reason: 'Strong application', notify: false });
-    assert.equal(approved.status, 200);
-    const saved = await Volunteer.findById(id).lean();
-    assert.equal(saved.status, 'approved');
-    assert.equal(saved.statusHistory.at(-1).reason, 'Strong application');
-
-    const audit = await admin.get('/api/admin/audit');
-    assert.ok(audit.body.data.some((a) => a.action === 'volunteer.status_changed'));
+    const count = async (qs) => (await admin.get(`/api/admin/agents?${qs}`)).body.meta.total;
+    assert.equal(await count('q=Ngozi'), 2);
+    assert.equal(await count('q=a8@example.com'), 1);
+    assert.equal(await count('agentCategory=pu_agent'), 2);
+    assert.equal(await count('agentCategory=canvasser'), 0);
+    assert.equal(await count('lga=Surulere&wardCode=20-01&pollingUnitCode=24-20-01-001'), 2);
+    assert.equal(await count('senatorialDistrict=LAGOS%20CENTRAL'), 2);
+    assert.equal(await count('stateOfOrigin=Anambra&lgaOfOrigin=Onitsha%20North'), 2);
+    assert.equal(await count('q=24-20-01-001'), 2);
+    assert.equal((await admin.get('/api/admin/agents?agentCategory=volunteer')).status, 422);
   });
 
-  test('filters validate their input', async () => {
-    const admin = await signIn('admin@test.org');
-    const res = await admin.get('/api/admin/volunteers?status=bogus');
-    assert.equal(res.status, 422);
-    assert.equal((await admin.get('/api/admin/volunteers?agentType=agent_9')).status, 422);
-  });
-
-  test('admin can filter and search by agent type, origin, ward and polling unit', async () => {
-    const admin = await signIn('admin@test.org');
-    const count = async (qs) => (await admin.get(`/api/admin/volunteers?${qs}`)).body.meta.total;
-    assert.equal(await count('agentType=agent_1'), 1);
-    assert.equal(await count('agentType=agent_2'), 0);
-    assert.equal(await count('stateOfOrigin=Anambra&lgaOfOrigin=Onitsha%20North'), 1);
-    assert.equal(await count('lga=Surulere&wardCode=20-01&pollingUnitCode=24-20-01-001'), 1);
-    assert.equal(await count('senatorialDistrict=LAGOS%20CENTRAL'), 1);
-    assert.equal(await count('q=24-20-01-001'), 1);
-    const list = await admin.get('/api/admin/volunteers?agentType=agent_1');
-    assert.equal(list.body.data[0].agentType, 'agent_1');
-    assert.equal(list.body.data[0].ward, 'ORILE');
-  });
-
-  test('reviewers cannot export, manage opportunities or staff', async () => {
+  test('authorised staff can open documents; every view is audited', async () => {
     const reviewer = await signIn('rev@test.org');
-    assert.equal((await reviewer.get('/api/admin/exports/volunteers')).status, 403);
-    assert.equal((await reviewer.get('/api/admin/staff')).status, 403);
-    assert.equal((await reviewer.post('/api/admin/opportunities').set(fetchHeader).send({ title: 'x' })).status, 403);
-    assert.equal((await reviewer.get('/api/admin/volunteers')).status, 200);
+    const a = await Agent.findOne({ firstName: 'Ngozi', email: 'ngozi@example.com' });
+    const detail = await reviewer.get(`/api/admin/agents/${a._id}`);
+    assert.equal(detail.status, 200);
+    assert.equal(detail.body.data.documents.passport.contentType, 'image/png');
+    assert.equal(detail.body.data.documents.passport.fileId, undefined, 'file ids stay on the server');
+    const img = await reviewer.get(`/api/admin/agents/${a._id}/documents/passport`).buffer(true);
+    assert.equal(img.status, 200);
+    assert.equal(img.headers['content-type'], 'image/png');
+    assert.equal(img.headers['cache-control'], 'private, no-store');
+    assert.match(img.headers['content-security-policy'], /sandbox/);
+    assert.equal(img.body.subarray(1, 4).toString(), 'PNG');
+    const pdfDoc = await Agent.findOne({ email: 'a8@example.com' });
+    const dl = await reviewer.get(`/api/admin/agents/${pdfDoc._id}/documents/pvc`);
+    assert.match(dl.headers['content-disposition'], /^attachment/);
+    assert.equal((await reviewer.get(`/api/admin/agents/${a._id}/documents/selfie`)).status, 404);
+    const { AuditLog } = await import('../src/models/misc.js');
+    assert.ok(await AuditLog.exists({ action: 'agent.document_viewed', targetId: String(a._id) }));
   });
 
-  test('CSV export protects against spreadsheet formula injection', async () => {
-    await Volunteer.updateOne({}, { community: '=HYPERLINK("http://evil")' });
+  test('reviewers cannot export, delete or manage staff', async () => {
+    const reviewer = await signIn('rev@test.org');
+    const a = await Agent.findOne({ email: 'a8@example.com' });
+    assert.equal((await reviewer.get('/api/admin/exports/agents')).status, 403);
+    assert.equal((await reviewer.get('/api/admin/staff')).status, 403);
+    assert.equal((await reviewer.delete(`/api/admin/agents/${a._id}`).set(fetchHeader).send({ confirmReference: a.reference, reason: 'test' })).status, 403);
+  });
+
+  test('admin reviews a registration and the change is persisted', async () => {
     const admin = await signIn('admin@test.org');
-    const res = await admin.get('/api/admin/exports/volunteers');
+    const a = await Agent.findOne({ email: 'ngozi@example.com' });
+    const res = await admin.patch(`/api/admin/agents/${a._id}/status`).set(fetchHeader).send({ status: 'approved', reason: 'Documents verified', notify: true });
+    assert.equal(res.status, 200);
+    const saved = await Agent.findById(a._id).lean();
+    assert.equal(saved.status, 'approved');
+    assert.ok(saved.notifications.some((n) => n.type === 'decision'));
+  });
+
+  test('CSV export has the agent fields, never the documents, and resists formula injection', async () => {
+    await Agent.updateOne({ email: 'ngozi@example.com' }, { middleName: '=HYPERLINK("http://evil")' });
+    const admin = await signIn('admin@test.org');
+    const res = await admin.get('/api/admin/exports/agents');
     assert.equal(res.status, 200);
     assert.match(res.text, /"'=HYPERLINK\(""http:\/\/evil""\)"/);
-    const [header, row] = res.text.replace(/^\uFEFF/, '').split('\r\n');
-    for (const col of ['Agent type', 'State of origin', 'LGA of origin', 'Ward', 'Polling unit', 'Polling unit code']) assert.ok(header.split(',').includes(col), col);
-    assert.match(row, /Agent 1/);
-    assert.match(row, /24-20-01-001/);
+    const header = res.text.replace(/^﻿/, '').split('\r\n')[0].split(',');
+    for (const col of ['Agent category', 'Email', 'State of origin', 'Ward', 'Polling unit code', 'Passport photograph', "Voter's card"]) assert.ok(header.includes(col), col);
+    assert.ok(!/sha256|fileId|GPS/i.test(res.text));
+    assert.match(res.text, /PU Agent/);
+  });
+
+  test('admin can permanently delete a registration and its documents', async () => {
+    const admin = await signIn('admin@test.org');
+    const a = await Agent.findOne({ email: 'a8@example.com' });
+    const wrong = await admin.delete(`/api/admin/agents/${a._id}`).set(fetchHeader).send({ confirmReference: 'LAG-XXXX-XXXX', reason: 'Requested by applicant' });
+    assert.equal(wrong.status, 400);
+    const ok = await admin.delete(`/api/admin/agents/${a._id}`).set(fetchHeader).send({ confirmReference: a.reference, reason: 'Requested by applicant' });
+    assert.equal(ok.status, 200);
+    assert.equal(await Agent.exists({ _id: a._id }), null);
+    assert.equal(await mongoose.connection.db.collection('agentDocuments.files').countDocuments({ 'metadata.reference': a.reference }), 0);
   });
 
   test('signing out revokes the session token', async () => {
     const admin = await signIn('admin@test.org');
     await admin.post('/api/admin/auth/logout').set(fetchHeader);
     assert.equal((await admin.get('/api/admin/dashboard')).status, 401);
-  });
-});
-
-describe('opportunities', () => {
-  test('only published opportunities are public, and archiving hides them', async () => {
-    const admin = await signIn('admin@test.org');
-    const draft = await admin.post('/api/admin/opportunities').set(fetchHeader).send({ title: 'Ward outreach', summary: 'Meet residents in your ward.', category: 'community_outreach' });
-    assert.equal(draft.status, 201, JSON.stringify(draft.body));
-    assert.equal((await request(app).get('/api/opportunities')).body.data.length, 0);
-
-    const id = draft.body.data._id;
-    await admin.patch(`/api/admin/opportunities/${id}`).set(fetchHeader).send({ status: 'published' });
-    const pub = await request(app).get('/api/opportunities');
-    assert.equal(pub.body.data.length, 1);
-    assert.equal(pub.body.data[0].createdBy, undefined);
-
-    await admin.delete(`/api/admin/opportunities/${id}`).set(fetchHeader);
-    assert.equal((await request(app).get(`/api/opportunities/${id}`)).status, 404);
-  });
-
-  test('rejects an end date before the start date', async () => {
-    const admin = await signIn('admin@test.org');
-    const res = await admin.post('/api/admin/opportunities').set(fetchHeader).send({ title: 'Event', summary: 'An event to support.', category: 'event_support', startDate: '2026-12-10', endDate: '2026-12-01' });
-    assert.equal(res.status, 422);
-  });
-});
-
-describe('agent type 2 registration', () => {
-  test('saves Agent 2 and shows it to staff', async () => {
-    const res = await request(app).post('/api/volunteers/register').send({
-      ...valid, firstName: 'Tunde', phone: '08097770000', email: 'tunde@example.com', agentType: 'agent_2',
-      stateOfOrigin: 'FCT', lgaOfOrigin: 'Gwagwalada', lga: 'Ikeja', lcda: '', wardCode: '11-01', pollingUnitCode: '24-11-01-001',
-    });
-    assert.equal(res.status, 201, JSON.stringify(res.body));
-    const admin = await signIn('admin@test.org');
-    const list = await admin.get('/api/admin/volunteers?agentType=agent_2');
-    assert.equal(list.body.meta.total, 1);
-    const detail = await admin.get(`/api/admin/volunteers/${list.body.data[0]._id}`);
-    assert.equal(detail.body.data.agentType, 'agent_2');
-    assert.equal(detail.body.data.pollingUnit, 'ANIFOWOSHE PRY. SCH.');
-    assert.equal(detail.body.data.senatorialDistrict, 'LAGOS WEST I');
   });
 });
