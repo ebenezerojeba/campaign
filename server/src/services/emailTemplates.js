@@ -269,3 +269,41 @@ Contact details, identification, bank details and documents are available only i
 ${textFooter(reason)}`,
   };
 }
+
+// Hourly summary for staff, used only when ADMIN_ALERT_MODE=digest. Counts
+// only: no names, contact, identity or bank details.
+export function adminDigest({ from, to, count, byType = [], topLgas = [] }) {
+  const url = `${site()}/admin/agents?status=pending`;
+  const fmt = (d) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+  const window = `${fmt(from)} to ${fmt(to)} (Lagos time)`;
+  const rows = [
+    ['Period', window],
+    ['New registrations', String(count)],
+    ...byType.map((t) => [labelFor(AGENT_CATEGORIES, t.type), String(t.count)]),
+    ...(topLgas.length ? [['Most active LGAs', topLgas.map((l) => `${l.lga} (${l.count})`).join(', ')]] : []),
+  ];
+  const reason = 'You are receiving this email because this address is set to receive registration summaries for APC Lagos Polling Unit Agent Registration.';
+  return {
+    subject: `${ORG}: Registration Summary (${count} new)`,
+    html: shell({
+      preheader: `${count} new registrations, ${window}.`,
+      reason,
+      rows: [
+        title('Hourly registration summary'),
+        paragraph(`${count === 1 ? 'One new registration was' : `${count} new registrations were`} submitted in this period and ${count === 1 ? 'is' : 'are'} awaiting review.`),
+        details(rows),
+        button({ href: url, label: 'Review pending registrations' }),
+        note('Individual details are available only in the administration dashboard after signing in.'),
+      ],
+    }),
+    text: `Hourly registration summary
+
+${textDetails(rows)}
+
+Review pending registrations: ${url}
+
+Individual details are available only in the administration dashboard after signing in.
+
+${textFooter(reason)}`,
+  };
+}

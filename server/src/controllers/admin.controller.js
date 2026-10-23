@@ -6,7 +6,7 @@ import { ApiError, send } from '../utils/ApiError.js';
 import { toCsv } from '../utils/csv.js';
 import { decryptField } from '../utils/secure.js';
 import { audit } from '../services/audit.js';
-import { sendDecisionEmail } from '../services/email.js';
+import { queueDecisionEmail, kickOutbox, drainOutbox, outboxStatus } from '../services/outbox.js';
 import { openDocument, deleteDocuments } from '../services/documents.js';
 import { issueStaffSession, clearSession, readStaffToken, STAFF_COOKIE } from '../middleware/index.js';
 import { normalisePhone, POLLING_UNIT_CODE_RE } from '../../../shared/schemas.js';
@@ -260,8 +260,14 @@ export async function updateAgentStatus(req, res) {
 
   let notification = null;
   if (notify && status !== 'pending' && !a.isSample) {
-    notification = await sendDecisionEmail(a);
-    await Agent.updateOne({ _id: a._id }, { $push: { notifications: notification } });
+    try {
+      await queueDecisionEmail(a);
+      kickOutbox({ max: 1, minIntervalMs: 0 });
+      notification = { type: 'decision', status: 'queued', at: new Date() };
+    } catch (err) {
+      console.error('[decision] could not queue email', err?.code ?? err?.name);
+      notification = { type: 'decision', status: 'failed', error: 'The decision email could not be queued.', at: new Date() };
+    }
   }
   send(res, { status: a.status, statusHistory: a.statusHistory, reviewedAt: a.reviewedAt, notification });
 }
@@ -395,4 +401,17 @@ export async function updateStaff(req, res) {
   await user.save();
   await audit(req, { action: 'staff.updated', targetType: 'User', targetId: user._id, summary: `${user.email}: role ${user.role}, ${user.active ? 'active' : 'deactivated'}` });
   send(res, { ...user.toSafeJSON(), active: user.active });
+}
+
+// ---------- Email outbox ----------
+
+export async function emailStatus(_req, res) {
+  send(res, await outboxStatus());
+}
+
+// Sends a few due emails now, within the same budget and pause rules.
+export async function emailDrain(req, res) {
+  const summary = await drainOutbox({ max: 10, timeLimitMs: 20000 });
+  await audit(req, { action: 'email.outbox_drained', summary: `Sent ${summary.sent}, retry ${summary.retry}, failed ${summary.failed}` });
+  send(res, { ...summary, status: await outboxStatus() });
 }

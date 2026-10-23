@@ -48,7 +48,10 @@ export function RegistrationSuccess({ result, onReset }) {
             {result.confirmationEmail === 'sent' && (
               <Alert tone="success" className="mt-5" title="Confirmation email on its way">Our mail server has accepted an email with your reference for {result.email}. It usually arrives within a few minutes. If it does not, check your spam or junk folder, and keep the reference shown above.</Alert>
             )}
-            {result.confirmationEmail !== 'sent' && (
+            {result.confirmationEmail === 'queued' && (
+              <Alert tone="info" className="mt-5" title="Your confirmation email will follow">Your registration is saved. We are sending a confirmation with your reference to {result.email}; at busy times it can take a while to arrive. Keep the reference shown above, and check your spam or junk folder if it does not appear.</Alert>
+            )}
+            {!['sent', 'queued'].includes(result.confirmationEmail) && (
               <Alert tone="warning" className="mt-5" title="We could not send your confirmation email">Your registration is saved. Write down or screenshot your reference above.</Alert>
             )}
 

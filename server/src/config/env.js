@@ -46,6 +46,16 @@ export const env = {
     replyTo: (process.env.EMAIL_REPLY_TO || '').trim(),
     adminTo: (process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || '').trim(),
   },
+  // Outbox pacing, kept under the SMTP provider's limits. Hostinger accepted
+  // roughly 3 messages a minute for apclagos.org once its domain rate limit
+  // engaged (23 Oct 2026).
+  outbox: {
+    maxPerMinute: Number(process.env.EMAIL_MAX_PER_MINUTE) || 3,
+    maxPerHour: Number(process.env.EMAIL_MAX_PER_HOUR) || 150,
+    // 'instant' sends one admin alert per registration; 'digest' sends one
+    // hourly summary instead. Change only with approval.
+    adminAlertMode: process.env.ADMIN_ALERT_MODE === 'digest' ? 'digest' : 'instant',
+  },
   // Encrypts NIN values when that field is switched on (shared/agentForm.js).
   dataEncryptionKey: process.env.DATA_ENCRYPTION_KEY || '',
   contact: {

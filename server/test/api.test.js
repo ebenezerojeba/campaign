@@ -133,9 +133,11 @@ describe('agent registration', () => {
     assert.equal(saved.documents.passport.width, 400);
     assert.equal(saved.documents.pvc.height, 640);
     assert.equal(saved.consent.sensitiveData, true);
-    // Confirmation goes to the applicant; the alert goes to the notification address.
-    const types = saved.notifications.map((n) => n.type).sort();
-    assert.deepEqual(types, ['admin_alert', 'registration_confirmation']);
+    // The confirmation and admin alert are queued in the outbox for paced sending.
+    assert.equal(res.body.data.confirmationEmail, 'queued');
+    const { EmailOutbox } = await import('../src/models/EmailOutbox.js');
+    const queued = await EmailOutbox.find({ agent: saved._id }).lean();
+    assert.deepEqual(queued.map((e) => e.type).sort(), ['admin_alert', 'registration_confirmation']);
     // Stored files exist in GridFS, and metadata text chunks were removed.
     const files = await mongoose.connection.db.collection('agentDocuments.files').find({ 'metadata.reference': reference }).toArray();
     assert.equal(files.length, 2);
@@ -380,7 +382,9 @@ describe('administration', () => {
     assert.equal(res.status, 200);
     const saved = await Agent.findById(a._id).lean();
     assert.equal(saved.status, 'approved');
-    assert.ok(saved.notifications.some((n) => n.type === 'decision'));
+    assert.equal(res.body.data.notification.status, 'queued');
+    const { EmailOutbox } = await import('../src/models/EmailOutbox.js');
+    assert.ok(await EmailOutbox.exists({ agent: a._id, type: 'decision' }), 'decision email queued');
   });
 
   test('CSV export has the agent fields, never the documents, and resists formula injection', async () => {

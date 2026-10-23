@@ -8,7 +8,7 @@ import { encryptField, keyedHash } from '../utils/secure.js';
 import { normalisePhone } from '../../../shared/schemas.js';
 import { PRIVACY_NOTICE_VERSION, labelFor, REGISTRATION_STATUSES } from '../../../shared/options.js';
 import { requiredDocuments } from '../../../shared/agentForm.js';
-import { sendRegistrationEmails } from '../services/email.js';
+import { queueRegistrationEmails, kickOutbox } from '../services/outbox.js';
 import { resolveElectoral, wardsFor, pollingUnitsFor, senatorialDistricts } from '../services/electoral.js';
 import { checkDocument, storeDocument, deleteDocuments } from '../services/documents.js';
 
@@ -23,6 +23,7 @@ export async function health(_req, res) {
 
 // Public, non-secret configuration used by the frontend.
 export async function publicConfig(_req, res) {
+  if (dbConfigured()) kickOutbox({ max: 1, minIntervalMs: 20000 });
   send(res, {
     registrationOpen: dbConfigured(),
     emailEnabled: emailConfigured(),
@@ -162,20 +163,23 @@ export async function register(req, res) {
   }
   if (!agent) throw new ApiError(500, 'SERVER_ERROR', 'We could not create a reference. Please try again.');
 
-  // The registration is already saved; email outcome is recorded, never fatal.
-  const notifications = await sendRegistrationEmails(agent).catch((err) => [
-    { type: 'registration_confirmation', status: 'failed', error: String(err?.message).slice(0, 300), at: new Date() },
-  ]);
-  await Agent.updateOne({ _id: agent._id }, { $push: { notifications: { $each: notifications } } }).catch((err) =>
-    console.error('[register] could not record notification status', err.message),
-  );
-  const confirmation = notifications.find((n) => n.type === 'registration_confirmation');
+  // The registration is saved. Emails go to the outbox and are sent after the
+  // response, within the provider's limits; a queuing problem is logged and
+  // never turns a saved registration into a failure.
+  let confirmationEmail = 'queued';
+  try {
+    await queueRegistrationEmails(agent);
+    kickOutbox();
+  } catch (err) {
+    confirmationEmail = 'failed';
+    console.error('[register] could not queue emails', err?.code ?? err?.name);
+  }
 
   send(res, {
     reference: agent.reference,
     firstName: agent.firstName,
     status: agent.status,
-    confirmationEmail: confirmation?.status ?? 'skipped',
+    confirmationEmail,
   }, undefined, 201);
 }
 

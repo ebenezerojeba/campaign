@@ -48,6 +48,9 @@ adminRouter.patch('/agents/:id/status', id, can('agents:review'), validate(v.sta
 adminRouter.post('/agents/:id/notes', id, can('agents:review'), validate(v.noteSchema), admin.addAgentNote);
 adminRouter.delete('/agents/:id', id, can('agents:delete'), validate(v.deleteAgentSchema), admin.deleteAgent);
 
+adminRouter.get('/email/status', can('agents:read'), admin.emailStatus);
+adminRouter.post('/email/drain', can('agents:review'), admin.emailDrain);
+
 adminRouter.get('/audit', can('audit:read'), validate(v.pageQuerySchema, 'query'), admin.listAudit);
 
 adminRouter.get('/staff', can('staff:manage'), admin.listStaff);

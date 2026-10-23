@@ -99,6 +99,9 @@ function logAttempt(entry) {
 const domainOf = (address) => String(address).split('@')[1]?.toLowerCase() ?? '';
 // The SMTP server's reply, e.g. "250 2.0.0 OK", trimmed and with addresses removed.
 const safeResponse = (text) => (text ? String(text).replace(/\S+@\S+/g, '[address]').slice(0, 120) : undefined);
+// A refusal's reason without addresses or provider keys, e.g.
+// '451 4.7.1 Ratelimit "hostinger_domain_out_ratelimit" exceeded'.
+const safeReason = (text) => (text ? String(text).replace(/\S+@\S+/g, '[address]').replace(/\s+for key\s+"[^"]*"/i, '').slice(0, 120) : undefined);
 
 // Sends one message and waits for the SMTP server's answer. Resolves to a
 // delivery record:
@@ -140,8 +143,9 @@ export async function sendEmail({ to, subject, html, text, workflow = 'email' })
     if (!ok) return { ...base, status: 'failed', error: 'The SMTP server refused the recipient address.', accepted, rejected, smtpResponse };
     return { ...base, status: 'sent', providerId: info.messageId, accepted, rejected, smtpResponse };
   } catch (err) {
-    logAttempt({ correlationId, workflow, outcome: 'failed', recipientDomain: domainOf(to), code: err?.code ?? 'unknown', responseCode: err?.responseCode, ms: Date.now() - startedAt });
-    return { ...base, status: 'failed', error: describeFailure(err), smtpCode: err?.responseCode };
+    const smtpReason = safeReason(err?.response);
+    logAttempt({ correlationId, workflow, outcome: 'failed', recipientDomain: domainOf(to), code: err?.code ?? 'unknown', responseCode: err?.responseCode, smtpReason, ms: Date.now() - startedAt });
+    return { ...base, status: 'failed', error: describeFailure(err), errorCode: err?.code ?? 'unknown', smtpCode: err?.responseCode, smtpReason };
   }
 }
 
