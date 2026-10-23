@@ -163,8 +163,11 @@ test('SMTP 451 rate limiting: retried later with backoff, sending paused, reason
   assert.equal(entry.smtpReason, '451 4.7.1 Ratelimit "hostinger_domain_out_ratelimit" exceeded');
   assert.ok(!JSON.stringify(entry).includes('RLsecretkey123'));
 
+  const state = await EmailState.findById('smtp').lean();
+  assert.equal(state.pausedUntil.toISOString(), '2026-11-01T15:01:00.000Z', 'rate-limit pause is 60 seconds');
+
   behaviour = null;
-  const paused = await outbox.drainOutbox({ max: 5, now: at('2026-11-01T15:02:00Z') });
+  const paused = await outbox.drainOutbox({ max: 5, now: at('2026-11-01T15:00:30Z') });
   assert.equal(paused.stoppedBy, 'paused');
   assert.equal(sent.length, 0, 'nothing sent during the pause');
 

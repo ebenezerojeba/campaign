@@ -25,7 +25,9 @@ export const RETRY_DELAYS_MIN = [5, 15, 45, 120, 360];
 export const MAX_ATTEMPTS = RETRY_DELAYS_MIN.length + 1;
 const LEASE_MS = 2 * 60 * 1000;
 // How long all sending pauses after the provider refuses for rate or capacity reasons.
-const PROVIDER_PAUSE_MS = { rateLimited: 5 * 60 * 1000, auth: 30 * 60 * 1000, unreachable: 2 * 60 * 1000, notConfigured: 15 * 60 * 1000 };
+// A rate-limit pause is short because Hostinger's allowance refills
+// continuously (about 3 a minute); it is set by EMAIL_RATE_LIMIT_PAUSE_SECONDS.
+const PROVIDER_PAUSE_MS = { rateLimited: env.outbox.rateLimitPauseSeconds * 1000, auth: 30 * 60 * 1000, unreachable: 2 * 60 * 1000, notConfigured: 15 * 60 * 1000 };
 
 const PRIORITY = { registration_confirmation: 1, decision: 2, admin_alert: 3, admin_digest: 3 };
 const STATE_ID = 'smtp';

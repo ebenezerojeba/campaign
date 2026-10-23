@@ -52,6 +52,8 @@ export const env = {
   outbox: {
     maxPerMinute: Number(process.env.EMAIL_MAX_PER_MINUTE) || 3,
     maxPerHour: Number(process.env.EMAIL_MAX_PER_HOUR) || 150,
+    // How long all sending pauses after a rate-limit refusal (SMTP 451/421).
+    rateLimitPauseSeconds: Number(process.env.EMAIL_RATE_LIMIT_PAUSE_SECONDS) || 60,
     // 'instant' sends one admin alert per registration; 'digest' sends one
     // hourly summary instead. Change only with approval.
     adminAlertMode: process.env.ADMIN_ALERT_MODE === 'digest' ? 'digest' : 'instant',
