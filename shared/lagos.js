@@ -1,44 +1,10 @@
-// Lagos State administrative areas.
-// 20 constitutionally recognised Local Government Areas (LGAs) and the
-// 37 Local Council Development Areas (LCDAs) created under them.
-// The programme team should verify this list before production use.
-// Wards and polling units come from the official INEC dataset in
-// pollingunit/ (see server/src/services/electoral.js), not from this file.
+// Lagos State's 20 constitutionally recognised Local Government Areas.
+// Wards, polling units and delimitation codes come from the official INEC
+// dataset in pollingunit/ (see server/src/services/electoral.js), not from this file.
 
 export const STATE = 'Lagos';
 
-export const LAGOS_AREAS = [
-  { lga: 'Agege', lcdas: ['Orile Agege'] },
-  { lga: 'Ajeromi-Ifelodun', lcdas: ['Ifelodun'] },
-  { lga: 'Alimosho', lcdas: ['Agbado/Oke-Odo', 'Ayobo/Ipaja', 'Egbe/Idimu', 'Ikotun/Igando', 'Mosan/Okunola'] },
-  { lga: 'Amuwo-Odofin', lcdas: ['Oriade'] },
-  { lga: 'Apapa', lcdas: ['Apapa-Iganmu'] },
-  { lga: 'Badagry', lcdas: ['Badagry West', 'Olorunda'] },
-  { lga: 'Epe', lcdas: ['Eredo', 'Ikosi-Ejirin'] },
-  { lga: 'Eti-Osa', lcdas: ['Eti-Osa East', 'Ikoyi-Obalende', 'Iru/Victoria Island'] },
-  { lga: 'Ibeju-Lekki', lcdas: ['Lekki'] },
-  { lga: 'Ifako-Ijaiye', lcdas: ['Ojokoro'] },
-  { lga: 'Ikeja', lcdas: ['Ojodu', 'Onigbongbo'] },
-  { lga: 'Ikorodu', lcdas: ['Igbogbo/Bayeku', 'Ijede', 'Ikorodu North', 'Ikorodu West', 'Imota'] },
-  { lga: 'Kosofe', lcdas: ['Agboyi-Ketu', 'Ikosi-Isheri'] },
-  { lga: 'Lagos Island', lcdas: ['Lagos Island East'] },
-  { lga: 'Lagos Mainland', lcdas: ['Yaba'] },
-  { lga: 'Mushin', lcdas: ['Odi-Olowo/Ojuwoye'] },
-  { lga: 'Ojo', lcdas: ['Iba', 'Oto-Awori'] },
-  { lga: 'Oshodi-Isolo', lcdas: ['Ejigbo', 'Isolo'] },
-  { lga: 'Shomolu', lcdas: ['Bariga'] },
-  { lga: 'Surulere', lcdas: ['Coker-Aguda', 'Itire-Ikate'] },
+export const LGA_NAMES = [
+  'Agege', 'Ajeromi-Ifelodun', 'Alimosho', 'Amuwo-Odofin', 'Apapa', 'Badagry', 'Epe', 'Eti-Osa', 'Ibeju-Lekki', 'Ifako-Ijaiye',
+  'Ikeja', 'Ikorodu', 'Kosofe', 'Lagos Island', 'Lagos Mainland', 'Mushin', 'Ojo', 'Oshodi-Isolo', 'Shomolu', 'Surulere',
 ];
-
-export const LGA_NAMES = LAGOS_AREAS.map((a) => a.lga);
-
-export function lcdasFor(lga) {
-  return LAGOS_AREAS.find((a) => a.lga === lga)?.lcdas ?? [];
-}
-
-// An LCDA is valid if empty, if it names the LGA's own core area, or if it belongs to the LGA.
-export function isValidLcda(lga, lcda) {
-  if (!lcda) return true;
-  if (lcda === lga) return true;
-  return lcdasFor(lga).includes(lcda);
-}
