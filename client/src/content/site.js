@@ -7,7 +7,7 @@ export const site = {
     programme: 'Polling Unit Agent Registration',
     title: 'APC Lagos Polling Unit Agent Registration',
     // Path to an approved official logo, e.g. '/brand/apc-lagos-logo.svg' (place the file in client/public/brand/).
-    logoUrl: '',
+    logoUrl: '/brand/apc-logo.jpg',
   },
 
   // Approved photography for the hero, e.g. [{ src: '/images/agents.jpg', alt: '...' }].

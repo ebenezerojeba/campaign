@@ -9,7 +9,7 @@ export function Logo({ tone = 'dark', className, to = '/' }) {
   return (
     <Link to={to} className={cx('group inline-flex items-center gap-2.5 rounded-md', className)} aria-label={`${site.brand.name} ${site.brand.programme}, home`}>
       {site.brand.logoUrl ? (
-        <img src={site.brand.logoUrl} alt="" className="h-10 w-auto" width="40" height="40" />
+        <img src={site.brand.logoUrl} alt="" className="h-11 w-auto shrink-0 rounded-md ring-2 ring-white/90" width="49" height="44" />
       ) : (
         <svg viewBox="0 0 64 64" className="size-10 shrink-0" aria-hidden>
           <rect width="64" height="64" rx="14" fill={light ? '#FFFFFF' : '#0E2A1C'} />

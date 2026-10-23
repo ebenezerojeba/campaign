@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { privacyNotice } from '../content/site.js';
 import { useConfig } from '../lib/config.jsx';
+import { OPTIONAL_FIELDS } from '../../../shared/agentForm.js';
 
 function Section({ title, children }) {
   return (
@@ -13,29 +14,34 @@ function Section({ title, children }) {
 
 function Privacy() {
   const { contact } = useConfig();
+  const extra = [OPTIONAL_FIELDS.dateOfBirth && 'date of birth', OPTIONAL_FIELDS.nin && 'National Identification Number (NIN)', OPTIONAL_FIELDS.selfie && 'a selfie'].filter(Boolean);
   return (
     <>
       <h1 className="type-h2 text-forest-900">Privacy notice</h1>
-      <p className="mt-3 text-sm text-slate-500">Version {privacyNotice.version}. This notice must be reviewed by the programme’s data protection lead before launch.</p>
-      <p className="type-lead mt-6 text-slate-600">This notice explains how the APC Lagos Volunteer Programme handles the personal information you give us, in line with the Nigeria Data Protection Act 2023.</p>
+      <p className="mt-3 text-sm text-slate-500">Version {privacyNotice.version}. This notice must be reviewed and approved by the data protection lead before launch.</p>
+      <p className="type-lead mt-6 text-slate-600">This notice explains how APC Lagos Polling Unit Agent Registration handles the personal information you give us, in line with the Nigeria Data Protection Act 2023 (NDPA).</p>
 
       <Section title="What we collect">
-        <p>Your name, phone number, optional email address, preferred contact method, local government area (and optionally your development area, ward and community), the activities you are interested in, your skills and availability, and anything you choose to tell us about why you want to volunteer.</p>
-        <p>We do not ask for your voter card, identity documents, bank details, exact address, location from your device, or information about your religion, ethnicity or voting intention.</p>
+        <p>Your name, email address, phone number, state and LGA of origin{extra.length ? `, ${extra.join(', ')}` : ''}, your agent category, and the LGA, ward and polling unit you will serve, with its INEC code and senatorial district.</p>
+        <p>We also collect a passport photograph and a photo or scan of your Permanent Voter Card (PVC){OPTIONAL_FIELDS.selfie ? ' and a selfie' : ''}. These are sensitive: they identify you and show your voter registration details.</p>
+        <p>We do not ask for bank details, your home address, location from your device, or information about your religion or ethnicity. Photo location data (GPS) is removed from JPEG images when they are uploaded.</p>
       </Section>
-      <Section title="Why we use it">
-        <p>To register you as a volunteer, review your application, contact you about the programme, match you with suitable activities and produce anonymous totals (for example, the number of volunteers per local government area). We rely on your consent, which you give when you submit the form.</p>
-        <p>If you opt in, we will also send you news about upcoming activities. You can opt out at any time.</p>
+      <Section title="Why we use it, and on what basis">
+        <p>To register you as a polling unit agent, verify that you are a registered voter at the polling unit you will serve, contact you about your registration, and coordinate agents per polling unit. We rely on your explicit consent, which you give when you submit the form. You can withdraw it at any time.</p>
+      </Section>
+      <Section title="How your documents are checked">
+        <p>When you upload a file, the system checks its format and content: that it really is a JPG, PNG, WebP or PDF file (not just named like one), that it is complete and of a usable size, and that a PDF contains no scripts or attachments. These checks do not prove that a voter’s card is authentic. Authorised staff review cards separately.</p>
       </Section>
       <Section title="Who can see it">
-        <p>Only authorised programme staff, through a password-protected administration system. Every administrative action, including viewing and exporting records, is logged. We use service providers to host the database and send emails; they process data only on our instructions. We do not sell your information.</p>
+        <p>Only authorised registration staff, through a password-protected administration system. Your documents are stored in a protected database, never at a public link, and every time a staff member opens your record or a document, it is logged. Data exports never include your documents{OPTIONAL_FIELDS.nin ? ' or NIN' : ''}.{OPTIONAL_FIELDS.nin ? ' Your NIN is encrypted, and revealing it is logged.' : ''}</p>
+        <p>We use service providers to host the website and database and to send emails. They process data only on our instructions. We do not sell your information or share it for marketing.</p>
       </Section>
       <Section title="How long we keep it">
-        <p>While you remain a volunteer, and for up to 12 months after you leave the programme or after an application is not approved. After that, your record is deleted.</p>
+        <p>For the election period your registration was collected for, and up to 12 months after it, or after a registration is not approved. Your record and every document are then permanently deleted.</p>
       </Section>
       <Section title="Your rights">
-        <p>You can ask to see, correct, export or delete your information, or withdraw your consent. Registered volunteers with an email address can do this from their <Link to="/portal" className="font-semibold text-green-700 underline underline-offset-4">volunteer account</Link>. Otherwise, contact the programme team{contact.email ? <> at <a className="font-semibold text-green-700 underline underline-offset-4" href={`mailto:${contact.email}`}>{contact.email}</a></> : ''} with your registration reference.</p>
-        <p>You may also complain to the Nigeria Data Protection Commission.</p>
+        <p>You can ask to see, correct or delete your information, object to its use, or withdraw your consent. Contact the registration team{contact.email ? <> at <a className="font-semibold text-green-700 underline underline-offset-4" href={`mailto:${contact.email}`}>{contact.email}</a></> : ''} with your registration reference. We will confirm the request comes from you before acting on it.</p>
+        <p>You may also complain to the Nigeria Data Protection Commission (NDPC).</p>
       </Section>
     </>
   );
@@ -45,15 +51,15 @@ function Terms() {
   return (
     <>
       <h1 className="type-h2 text-forest-900">Terms of use</h1>
-      <p className="mt-3 text-sm text-slate-500">These terms must be reviewed by the programme before launch.</p>
+      <p className="mt-3 text-sm text-slate-500">These terms must be reviewed before launch.</p>
       <Section title="Using this website">
-        <p>This website lets residents of Lagos State register interest in volunteering with the APC Lagos Volunteer Programme. Registering does not guarantee a volunteer role or any payment.</p>
+        <p>This website lets people register as an agent, canvasser, mobilizer or polling unit agent for a polling unit in Lagos State. Registering does not guarantee appointment or any payment.</p>
       </Section>
-      <Section title="Your information">
-        <p>Please give accurate information and register only yourself, unless you are helping someone who has agreed to register. Our <Link to="/privacy" className="font-semibold text-green-700 underline underline-offset-4">privacy notice</Link> explains how your information is used.</p>
+      <Section title="Your information and documents">
+        <p>Register only yourself, give accurate information, and upload only your own passport photograph and voter’s card. Submitting another person’s documents, or altered documents, is not allowed and will lead to your registration being rejected. Our <Link to="/privacy" className="font-semibold text-green-700 underline underline-offset-4">privacy notice</Link> explains how your information is used.</p>
       </Section>
       <Section title="Acceptable use">
-        <p>Do not attempt to access records that are not yours, interfere with the service, or submit registrations automatically. Volunteering is unpaid and voluntary, and you may withdraw at any time.</p>
+        <p>Do not attempt to access records that are not yours, interfere with the service, or submit registrations automatically.</p>
       </Section>
     </>
   );

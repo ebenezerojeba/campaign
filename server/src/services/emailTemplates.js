@@ -15,9 +15,11 @@ function layout({ preheader, heading, bodyHtml, cta, footer }) {
 <span style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(preheader)}</span>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.mist};padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:16px;overflow:hidden;border:1px solid ${C.line}">
-<tr><td style="background:${C.forest};padding:22px 28px;border-bottom:4px solid ${C.gold}">
-<div style="color:#fff;font-size:18px;font-weight:800;letter-spacing:-0.2px">APC Lagos</div>
-<div style="color:#BFD6C6;font-size:13px;margin-top:2px">Polling Unit Agent Registration</div></td></tr>
+<tr><td style="background:${C.forest};padding:20px 28px;border-bottom:4px solid ${C.gold}">
+<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="padding-right:12px;vertical-align:middle"><img src="${esc(env.frontendUrl)}/brand/apc-logo.jpg" width="49" height="44" alt="APC" style="display:block;border:2px solid #fff;border-radius:6px"></td>
+<td style="vertical-align:middle"><div style="color:#fff;font-size:18px;font-weight:800;letter-spacing:-0.2px">APC Lagos</div>
+<div style="color:#BFD6C6;font-size:13px;margin-top:2px">Polling Unit Agent Registration</div></td></tr></table></td></tr>
 <tr><td style="padding:28px">
 <h1 style="margin:0 0 14px;font-size:22px;line-height:1.3;color:${C.forest}">${esc(heading)}</h1>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${bodyHtml}${button}</table>
