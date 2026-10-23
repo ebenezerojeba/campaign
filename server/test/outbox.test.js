@@ -271,3 +271,20 @@ test('diagnostics report counts, pause state and the latest refusal without pers
   assert.equal(status.recentRefusals[0].code, 451);
   assert.ok(!JSON.stringify(status).includes('@example.com'));
 });
+
+test('admin alerts off: none queued, waiting ones cancelled unsent, applicants still get confirmations', async () => {
+  const before = await savedAgent();
+  await outbox.queueRegistrationEmails(before); // queued while alerts were on
+  env.outbox.adminAlertMode = 'off';
+  const after = await savedAgent();
+  await outbox.queueRegistrationEmails(after);
+  assert.equal(await EmailOutbox.countDocuments({ type: 'admin_alert' }), 1, 'no new admin alert queued');
+  const summary = await outbox.drainOutbox({ max: 5, now: at('2026-11-02T09:00:00Z') });
+  assert.equal(summary.sent, 2, 'both confirmations sent');
+  assert.ok(sent.every((m) => m.to !== 'alerts@example.org'), 'no admin email sent');
+  const alert = await EmailOutbox.findOne({ type: 'admin_alert' }).lean();
+  assert.equal(alert.status, 'cancelled');
+  assert.equal(alert.attempts, 0, 'cancelled without using the sending allowance');
+  const digest = await outbox.drainOutbox({ max: 5, now: at('2026-11-02T10:00:30Z') });
+  assert.equal(digest.sent, 0, 'no hourly summary either');
+});

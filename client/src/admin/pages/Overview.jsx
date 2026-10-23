@@ -86,7 +86,7 @@ function EmailDelivery() {
       </ul>
       {data.pausedUntil && <p className="mt-4 rounded-lg border border-line bg-mist px-3 py-2 text-sm text-ink">Sending paused until {formatDateTime(data.pausedUntil)} ({data.pauseReason === 'rateLimited' ? 'the mail server asked us to slow down' : data.pauseReason === 'auth' ? 'mail server login failed: check SMTP settings' : 'mail server unavailable'}). It resumes automatically.</p>}
       {data.recentRefusals[0] && <p className="mt-3 text-xs text-slate-500">Latest refusal: {data.recentRefusals[0].code} {data.recentRefusals[0].reason ?? ''} ({formatDateTime(data.recentRefusals[0].last)})</p>}
-      <p className="mt-3 text-xs text-slate-500">Admin alerts: {data.adminAlertMode === 'digest' ? 'one hourly summary' : 'one email per registration'}.</p>
+      <p className="mt-3 text-xs text-slate-500">Admin alerts: {data.adminAlertMode === 'digest' ? 'one hourly summary' : data.adminAlertMode === 'off' ? 'switched off, so all sending goes to applicants. New registrations appear here in the dashboard' : 'one email per registration'}.</p>
     </Card>
   );
 }

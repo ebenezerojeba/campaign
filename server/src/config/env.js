@@ -55,8 +55,9 @@ export const env = {
     // How long all sending pauses after a rate-limit refusal (SMTP 451/421).
     rateLimitPauseSeconds: Number(process.env.EMAIL_RATE_LIMIT_PAUSE_SECONDS) || 60,
     // 'instant' sends one admin alert per registration; 'digest' sends one
-    // hourly summary instead. Change only with approval.
-    adminAlertMode: process.env.ADMIN_ALERT_MODE === 'digest' ? 'digest' : 'instant',
+    // hourly summary instead; 'off' sends no admin email at all, leaving the
+    // whole sending allowance for applicants. Change only with approval.
+    adminAlertMode: ['digest', 'off'].includes(process.env.ADMIN_ALERT_MODE) ? process.env.ADMIN_ALERT_MODE : 'instant',
   },
   // Encrypts NIN values when that field is switched on (shared/agentForm.js).
   dataEncryptionKey: process.env.DATA_ENCRYPTION_KEY || '',

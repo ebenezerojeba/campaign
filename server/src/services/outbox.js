@@ -154,9 +154,21 @@ async function recordOnAgent(entry, outcome) {
 
 // ---------- Sending ----------
 
+// When per-registration admin alerts are switched off (digest or off mode),
+// alerts still waiting are cancelled, not sent: registrations stay visible in
+// the dashboard, and the sending allowance goes to applicants.
+async function cancelAdminAlertsIfOff() {
+  if (env.outbox.adminAlertMode === 'instant') return;
+  await EmailOutbox.updateMany(
+    { type: 'admin_alert', status: 'queued' },
+    { $set: { status: 'cancelled', error: `Admin alerts switched off (ADMIN_ALERT_MODE=${env.outbox.adminAlertMode})` } },
+  );
+}
+
 async function claim(now) {
+  const typeFilter = env.outbox.adminAlertMode === 'instant' ? {} : { type: { $ne: 'admin_alert' } };
   return EmailOutbox.findOneAndUpdate(
-    { $or: [{ status: 'queued', nextAttemptAt: { $lte: now } }, { status: 'sending', leaseUntil: { $lt: now } }] },
+    { ...typeFilter, $or: [{ status: 'queued', nextAttemptAt: { $lte: now } }, { status: 'sending', leaseUntil: { $lt: now } }] },
     { $set: { status: 'sending', leaseUntil: new Date(now.getTime() + LEASE_MS), lastAttemptAt: now }, $inc: { attempts: 1 } },
     { sort: { priority: 1, nextAttemptAt: 1 }, new: true },
   ).lean();
@@ -199,6 +211,7 @@ export async function drainOutbox({ max = 3, now = () => new Date(), timeLimitMs
   const started = Date.now();
   const summary = { sent: 0, retry: 0, failed: 0, cancelled: 0, stoppedBy: null };
   await queueDigestIfDue(now()).catch((err) => console.error('[outbox] digest queue failed', err.message));
+  await cancelAdminAlertsIfOff().catch((err) => console.error('[outbox] admin alert cancel failed', err.message));
   for (let i = 0; i < max; i += 1) {
     if (Date.now() - started > timeLimitMs) { summary.stoppedBy = 'time'; break; }
     const t = now();
