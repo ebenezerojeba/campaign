@@ -1,16 +1,13 @@
-// Sensitive financial and identity details remain feature-gated in production.
-// This suite explicitly enables the path to test validation, encryption and access control.
+// Identity and bank details: validation, encryption and access control.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
 
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret-that-is-long-enough-for-hs256-signing';
-process.env.RESEND_API_KEY = '';
+process.env.SMTP_HOST = ""; // never send real email from tests
 process.env.DATA_ENCRYPTION_KEY = 'test-only-encryption-key-with-enough-entropy';
 
-const { OPTIONAL_FIELDS } = await import('../../shared/agentForm.js');
-OPTIONAL_FIELDS.financialIdentityDetails = true;
 
 const { MongoMemoryServer } = await import('mongodb-memory-server-core');
 const mongoose = (await import('mongoose')).default;
@@ -42,8 +39,8 @@ const base = {
   agentCategory: 'agent_1', state: 'Lagos', lga: 'Surulere',
   wardCode: '20-01', pollingUnitCode: '24-20-01-001',
   bankName: 'Access Bank', accountName: 'Ngozi Okafor', accountNumber: '0123456789',
-  nin: '12345678901', voterRegistrationNumber: 'AB-123-456', apcPartyCardNumber: 'APC/123456',
-  ageConfirmed: true, declarationAccurate: true, consentProcessing: true, consentSensitive: true,
+  nin: '12345678901', vin: '90F5 B0D1 2345 6789 012', apcPartyRegistrationNumber: 'APC/123456',
+  declarationAccurate: true, consentProcessing: true, consentSensitive: true,
   consentFinancialIdentity: true,
 };
 
@@ -88,15 +85,15 @@ test('validates exact account and NIN lengths and conservative pending ID format
     ['accountNumber', '123456789a'],
     ['nin', '1234567890'],
     ['nin', '1234567890x'],
-    ['voterRegistrationNumber', ''],
-    ['voterRegistrationNumber', 'AB@123'],
-    ['apcPartyCardNumber', ''],
-    ['apcPartyCardNumber', 'APC#123'],
+    ['vin', ''],
+    ['vin', 'AB@123'],
+    ['apcPartyRegistrationNumber', ''],
+    ['apcPartyRegistrationNumber', 'APC#123'],
     ['bankName', 'Unknown Bank'],
   ]) {
     assert.equal(registrationSchema.safeParse({ ...base, [key]: value }).success, false, `${key} should reject ${value}`);
   }
-  for (const key of ['bankName', 'accountName', 'accountNumber', 'nin', 'voterRegistrationNumber', 'apcPartyCardNumber', 'consentFinancialIdentity']) {
+  for (const key of ['bankName', 'accountName', 'accountNumber', 'nin', 'vin', 'apcPartyRegistrationNumber', 'consentFinancialIdentity']) {
     const { [key]: _removed, ...missing } = base;
     assert.equal(registrationSchema.safeParse(missing).success, false, `${key} is required`);
   }
@@ -108,8 +105,8 @@ test('API rejects malformed or missing sensitive fields without echoing their va
     ['accountNumber', '123456789x'],
     ['nin', '1234567890'],
     ['nin', '1234567890x'],
-    ['voterRegistrationNumber', 'AB@123'],
-    ['apcPartyCardNumber', 'APC#123'],
+    ['vin', 'AB@123'],
+    ['apcPartyRegistrationNumber', 'APC#123'],
     ['bankName', 'Unlisted Bank'],
     ['accountName', ''],
   ];
@@ -122,10 +119,10 @@ test('API rejects malformed or missing sensitive fields without echoing their va
     assert.equal(Boolean(await Agent.exists({ email })), false, `${field} must not be saved`);
   }
 
-  const { bankName: _bank, accountName: _accountName, accountNumber: _account, nin: _nin, voterRegistrationNumber: _voter, apcPartyCardNumber: _party, ...missing } = base;
+  const { bankName: _bank, accountName: _accountName, accountNumber: _account, nin: _nin, vin: _voter, apcPartyRegistrationNumber: _party, ...missing } = base;
   const response = await submit({ ...missing, email: 'missing@example.com', phone: '08031234100' });
   assert.equal(response.status, 422);
-  for (const field of ['bankName', 'accountName', 'accountNumber', 'nin', 'voterRegistrationNumber', 'apcPartyCardNumber']) {
+  for (const field of ['bankName', 'accountName', 'accountNumber', 'nin', 'vin', 'apcPartyRegistrationNumber']) {
     assert.ok(response.body.error.details.fields[field], `${field} is required`);
   }
 });
@@ -139,8 +136,8 @@ test('stores sensitive details encrypted and reveals them only to an admin with 
   assert.equal(decryptField(record.nin.encrypted), base.nin);
   assert.equal(decryptField(record.bankDetails.accountNameEncrypted), base.accountName);
   assert.equal(decryptField(record.bankDetails.accountNumberEncrypted), base.accountNumber);
-  assert.equal(decryptField(record.identityDetails.voterRegistrationNumberEncrypted), base.voterRegistrationNumber);
-  assert.equal(decryptField(record.identityDetails.apcPartyCardNumberEncrypted), base.apcPartyCardNumber);
+  assert.equal(decryptField(record.identityDetails.vinEncrypted), base.vin);
+  assert.equal(decryptField(record.identityDetails.apcPartyRegistrationNumberEncrypted), base.apcPartyRegistrationNumber);
   assert.ok(!JSON.stringify(record).includes(base.accountNumber));
   assert.ok(!JSON.stringify(record).includes(base.nin));
 
@@ -155,8 +152,8 @@ test('stores sensitive details encrypted and reveals them only to an admin with 
   assert.equal(reveal.status, 200, JSON.stringify(reveal.body));
   assert.equal(reveal.body.data.accountNumber, base.accountNumber);
   assert.equal(reveal.body.data.nin, base.nin);
-  assert.equal(reveal.body.data.voterRegistrationNumber, base.voterRegistrationNumber);
-  assert.equal(reveal.body.data.apcPartyCardNumber, base.apcPartyCardNumber);
+  assert.equal(reveal.body.data.vin, base.vin);
+  assert.equal(reveal.body.data.apcPartyRegistrationNumber, base.apcPartyRegistrationNumber);
   assert.equal(reveal.body.data.bankAccountVerification.status, 'not_verified');
   const audit = await mongoose.connection.db.collection('auditlogs').findOne({ action: 'agent.sensitive_details_revealed' });
   assert.ok(audit);

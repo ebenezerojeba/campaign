@@ -6,11 +6,11 @@ import zlib from 'node:zlib';
 
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret-that-is-long-enough-for-hs256-signing';
-process.env.RESEND_API_KEY = '';
+process.env.SMTP_HOST = ""; // never send real email from tests
 process.env.DATA_ENCRYPTION_KEY = 'test-only-encryption-key-with-enough-entropy';
 
 const { OPTIONAL_FIELDS } = await import('../../shared/agentForm.js');
-Object.assign(OPTIONAL_FIELDS, { dateOfBirth: true, nin: true, selfie: true });
+Object.assign(OPTIONAL_FIELDS, { selfie: true });
 
 const { MongoMemoryServer } = await import('mongodb-memory-server-core');
 const mongoose = (await import('mongoose')).default;
@@ -35,9 +35,10 @@ function png(width, height, shade) {
 
 const base = {
   firstName: 'Tunde', lastName: 'Bello', email: 'tunde@example.com', phone: '08035550000',
-  stateOfOrigin: 'Oyo', lgaOfOrigin: 'Ibadan North', agentCategory: 'canvasser', state: 'Lagos', lga: 'Ikeja',
+  stateOfOrigin: 'Oyo', lgaOfOrigin: 'Ibadan North', agentCategory: 'agent_2', state: 'Lagos', lga: 'Ikeja',
   wardCode: '11-01', pollingUnitCode: '24-11-01-001', dateOfBirth: '1990-05-17', nin: '12345678901',
-  ageConfirmed: true, declarationAccurate: true, consentProcessing: true, consentSensitive: true,
+  vin: '90F5B0D1234567890AB', apcPartyRegistrationNumber: 'LA-IKJ-778', bankName: 'Access Bank', accountName: 'Tunde Bello', accountNumber: '0987654321',
+  declarationAccurate: true, consentProcessing: true, consentSensitive: true, consentFinancialIdentity: true,
 };
 
 const submit = (data, { selfie = true, shade = 60 } = {}) => {
@@ -62,11 +63,12 @@ after(async () => {
   await mongo.stop();
 });
 
-test('collects date of birth, an encrypted NIN and a selfie when switched on', async () => {
+test('registers an Agent 2 with date of birth, encrypted NIN and the optional selfie switched on', async () => {
   const res = await submit(base);
   assert.equal(res.status, 201, JSON.stringify(res.body));
   const raw = await mongoose.connection.db.collection('agents').findOne({ reference: res.body.data.reference });
-  assert.equal(raw.dateOfBirth, '1990-05-17');
+  assert.equal(raw.agentCategory, 'agent_2');
+  assert.equal(raw.dateOfBirth.toISOString(), '1990-05-17T00:00:00.000Z');
   assert.equal(raw.nin.last4, '8901');
   assert.ok(!JSON.stringify(raw).includes('12345678901'), 'NIN is never stored in clear');
   assert.ok(raw.documents.selfie.fileId);
@@ -74,9 +76,9 @@ test('collects date of birth, an encrypted NIN and a selfie when switched on', a
   assert.equal(decryptField(raw.nin.encrypted), '12345678901');
 });
 
-test('validates age, NIN format, duplicate NIN and the required selfie', async () => {
-  const young = await submit({ ...base, phone: '08035550001', email: 'b@example.com', dateOfBirth: '2015-01-01' }, { shade: 61 });
-  assert.match(young.body.error.details.fields.dateOfBirth, /18 or older/);
+test('validates date of birth, NIN format, duplicate NIN and the switched-on selfie', async () => {
+  const future = await submit({ ...base, phone: '08035550001', email: 'b@example.com', vin: 'OTHERVIN12345', dateOfBirth: '2999-01-01' }, { shade: 61 });
+  assert.match(future.body.error.details.fields.dateOfBirth, /future/);
   const badNin = await submit({ ...base, phone: '08035550001', email: 'b@example.com', nin: '12345' }, { shade: 61 });
   assert.ok(badNin.body.error.details.fields.nin);
   const noSelfie = await submit({ ...base, phone: '08035550001', email: 'b@example.com' }, { selfie: false, shade: 61 });

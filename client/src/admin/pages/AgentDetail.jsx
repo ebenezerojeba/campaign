@@ -162,7 +162,7 @@ function SensitiveDetails({ agent }) {
   const { api, user } = useAdmin();
   const [details, setDetails] = useState(null);
   const [error, setError] = useState(null);
-  const hasDetails = agent.nin?.last4 || agent.bankDetails?.bankName || agent.identityDetails?.voterRegistrationNumberLast4 || agent.identityDetails?.apcPartyCardNumberLast4;
+  const hasDetails = agent.nin?.last4 || agent.bankDetails?.bankName || agent.identityDetails?.vinLast4 || agent.identityDetails?.apcPartyRegistrationNumberLast4;
   if (!hasDetails) return null;
   const reveal = async () => {
     setError(null);
@@ -170,19 +170,28 @@ function SensitiveDetails({ agent }) {
   };
   return (
     <>
-      <Row label="Sensitive details">
+      <Row label="Identity and bank details">
         {can(user, 'agents:sensitive:read') ? (
           <div className="space-y-2">
             {!details ? (
-              <p className="text-sm text-slate-600">Banking and identification values are masked. Revealing them is restricted to administrators and recorded in the audit log.</p>
+              <>
+                <dl className="grid gap-2 sm:grid-cols-2">
+                  {agent.bankDetails?.bankName && <div><dt className="text-xs text-slate-500">Bank</dt><dd>{agent.bankDetails.bankName}</dd></div>}
+                  {agent.bankDetails?.accountNumberLast4 && <div><dt className="text-xs text-slate-500">Account number</dt><dd className="font-mono">••••••{agent.bankDetails.accountNumberLast4}</dd></div>}
+                  {agent.nin?.last4 && <div><dt className="text-xs text-slate-500">NIN</dt><dd className="font-mono">•••••••{agent.nin.last4}</dd></div>}
+                  {agent.identityDetails?.vinLast4 && <div><dt className="text-xs text-slate-500">VIN</dt><dd className="font-mono">••••{agent.identityDetails.vinLast4}</dd></div>}
+                  {agent.identityDetails?.apcPartyRegistrationNumberLast4 && <div><dt className="text-xs text-slate-500">APC party registration number</dt><dd className="font-mono">••••{agent.identityDetails.apcPartyRegistrationNumberLast4}</dd></div>}
+                </dl>
+                <p className="text-sm text-slate-600">Values are masked. Revealing them in full is limited to administrators and recorded in the audit log.</p>
+              </>
             ) : (
               <dl className="grid gap-2 sm:grid-cols-2">
                 {details.bankName && <div><dt className="text-xs text-slate-500">Bank</dt><dd>{details.bankName}</dd></div>}
                 {details.accountName && <div><dt className="text-xs text-slate-500">Account name</dt><dd>{details.accountName}</dd></div>}
                 {details.accountNumber && <div><dt className="text-xs text-slate-500">Account number</dt><dd className="font-mono">{details.accountNumber}</dd></div>}
                 {details.nin && <div><dt className="text-xs text-slate-500">NIN</dt><dd className="font-mono">{details.nin}</dd></div>}
-                {details.voterRegistrationNumber && <div><dt className="text-xs text-slate-500">Voter registration number <span className="font-normal">(format pending verification)</span></dt><dd className="font-mono">{details.voterRegistrationNumber}</dd></div>}
-                {details.apcPartyCardNumber && <div><dt className="text-xs text-slate-500">APC party card number <span className="font-normal">(format pending verification)</span></dt><dd className="font-mono">{details.apcPartyCardNumber}</dd></div>}
+                {details.vin && <div><dt className="text-xs text-slate-500">VIN <span className="font-normal">(format pending official rules)</span></dt><dd className="font-mono">{details.vin}</dd></div>}
+                {details.apcPartyRegistrationNumber && <div><dt className="text-xs text-slate-500">APC party registration number <span className="font-normal">(format pending official rules)</span></dt><dd className="font-mono">{details.apcPartyRegistrationNumber}</dd></div>}
                 {details.bankAccountVerification && <div><dt className="text-xs text-slate-500">Bank account name check</dt><dd>{details.bankAccountVerification.message}</dd></div>}
                 {details.identityVerification && <div><dt className="text-xs text-slate-500">Identity checks</dt><dd>{details.identityVerification.message}</dd></div>}
               </dl>
@@ -273,7 +282,7 @@ export default function AgentDetail() {
         <div className="space-y-6">
           <Card title="Registration" bodyClassName="py-2">
             <dl className="divide-y divide-line">
-              <Row label="Agent category">{labelFor(AGENT_CATEGORIES, a.agentCategory)}</Row>
+              <Row label="Agent type">{labelFor(AGENT_CATEGORIES, a.agentCategory)}</Row>
               <Row label="Email"><a href={`mailto:${a.email}`} className="inline-flex items-center gap-1.5 hover:underline"><Mail className="size-4 text-slate-400" aria-hidden />{a.email}</a></Row>
               <Row label="Phone">
                 <span className="flex flex-wrap items-center gap-3">
@@ -281,7 +290,7 @@ export default function AgentDetail() {
                   <a href={`tel:${a.phone}`} className="inline-flex items-center gap-1 text-sm font-semibold text-green-700 hover:underline"><Phone className="size-3.5" aria-hidden />Call</a>
                 </span>
               </Row>
-              <Row label="Date of birth">{a.dateOfBirth && formatDate(`${a.dateOfBirth}T12:00:00+01:00`)}</Row>
+              <Row label="Date of birth">{a.dateOfBirth && `${a.dateOfBirth.slice(8, 10)}/${a.dateOfBirth.slice(5, 7)}/${a.dateOfBirth.slice(0, 4)}`}</Row>
               <SensitiveDetails agent={a} />
               <Row label="Origin">{a.lgaOfOrigin && `${a.lgaOfOrigin} LGA, ${stateLabel(a.stateOfOrigin)}`}</Row>
               <Row label="LGA">{`${a.lga} LGA, ${a.state ?? 'Lagos'} State`}</Row>

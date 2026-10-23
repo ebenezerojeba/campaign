@@ -27,6 +27,8 @@ export const agentQuerySchema = z.object({
   to: isoDate.optional(),
   sample: z.enum(['all', 'real', 'sample']).default('all'),
   sort: z.enum(['newest', 'oldest', 'name']).default('newest'),
+  // Export only: full identity and bank values need agents:sensitive:read.
+  sensitive: z.enum(['masked', 'full']).default('masked'),
   page,
   limit: z.coerce.number().int().min(5).max(100).default(20),
 });

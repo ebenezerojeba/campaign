@@ -2,17 +2,12 @@
 // rules for uploaded files. Shared by the browser and the API so both enforce
 // the same thing.
 //
-// Turn a field on only after the programme's data protection lead has
-// confirmed it is authorised and necessary (Nigeria Data Protection Act 2023:
-// collect only what the purpose needs). Update the privacy notice at the same
-// time. NIN additionally needs DATA_ENCRYPTION_KEY set on the server.
+// Date of birth, NIN, VIN, APC party registration number and bank details
+// are always required (approved by APC Lagos, October 2026) and need
+// DATA_ENCRYPTION_KEY on the server. Turn an optional field on only after the
+// data protection lead confirms it is necessary, and update the privacy notice.
 export const OPTIONAL_FIELDS = {
-  dateOfBirth: true,
-  nin: false,
   selfie: false,
-  // Keep disabled until the programme approves and publishes the purpose for
-  // collecting financial and identification data.
-  financialIdentityDetails: false,
 };
 
 const MB = 1024 * 1024;

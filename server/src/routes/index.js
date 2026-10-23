@@ -44,7 +44,6 @@ adminRouter.get('/exports/agents', can('agents:export'), validate(v.agentQuerySc
 adminRouter.get('/agents/:id', id, can('agents:read'), admin.getAgent);
 adminRouter.post('/agents/:id/sensitive-details', id, can('agents:sensitive:read'), admin.revealSensitiveDetails);
 adminRouter.get('/agents/:id/documents/:kind', id, can('documents:read'), admin.getAgentDocument);
-adminRouter.post('/agents/:id/nin', id, can('agents:sensitive:read'), admin.revealNin);
 adminRouter.patch('/agents/:id/status', id, can('agents:review'), validate(v.statusChangeSchema), admin.updateAgentStatus);
 adminRouter.post('/agents/:id/notes', id, can('agents:review'), validate(v.noteSchema), admin.addAgentNote);
 adminRouter.delete('/agents/:id', id, can('agents:delete'), validate(v.deleteAgentSchema), admin.deleteAgent);

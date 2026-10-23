@@ -5,7 +5,7 @@
 // preview does not load the official dataset.
 import { LGA_NAMES } from '../../../shared/lagos.js';
 import { STATE_NAMES, lgasOfState } from '../../../shared/nigeria.js';
-import { AGENT_CATEGORIES, labelFor, valuesOf } from '../../../shared/options.js';
+import { REGISTRATION_CATEGORIES, labelFor, valuesOf } from '../../../shared/options.js';
 import { ApiError } from '../lib/api.js';
 
 let seed = 7;
@@ -31,7 +31,7 @@ const agents = Array.from({ length: 164 }, (_, i) => {
     _id: `demo-agent-${i}`, reference: ref(), firstName, lastName,
     email: `${firstName}.${lastName}.${i}@example.com`.toLowerCase(),
     phone: `+23480${String(10000000 + i * 7919).slice(-8)}`,
-    agentCategory: pick(valuesOf(AGENT_CATEGORIES)), stateOfOrigin: origin, lgaOfOrigin: pick(lgasOfState(origin)),
+    agentCategory: pick(valuesOf(REGISTRATION_CATEGORIES)), stateOfOrigin: origin, lgaOfOrigin: pick(lgasOfState(origin)),
     state: 'Lagos', lga, status, isSample: true, documents: {},
     consent: { processing: true, sensitiveData: true, noticeVersion: '2026-10-agents', at: created.toISOString() },
     createdAt: created.toISOString(), statusHistory: [{ to: 'pending', reason: 'Registration submitted', at: created.toISOString() }],
@@ -48,7 +48,7 @@ function dashboard() {
   });
   const byLga = LGA_NAMES.map((lga) => ({ lga, total: agents.filter((v) => v.lga === lga).length, approved: agents.filter((v) => v.lga === lga && v.status === 'approved').length }))
     .filter((l) => l.total).sort((a, b) => b.total - a.total);
-  const byCategory = valuesOf(AGENT_CATEGORIES).map((c) => ({ category: c, label: labelFor(AGENT_CATEGORIES, c), count: agents.filter((v) => v.agentCategory === c).length })).sort((a, b) => b.count - a.count);
+  const byCategory = valuesOf(REGISTRATION_CATEGORIES).map((c) => ({ category: c, label: labelFor(REGISTRATION_CATEGORIES, c), count: agents.filter((v) => v.agentCategory === c).length })).sort((a, b) => b.count - a.count);
   return {
     totals: { all: agents.length, pending: count('pending'), approved: count('approved'), rejected: count('rejected') },
     trend, byLga, byCategory, recent: agents.slice(0, 6), sampleCount: agents.length,

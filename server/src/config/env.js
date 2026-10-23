@@ -27,11 +27,19 @@ export const env = {
   frontendUrl: (process.env.FRONTEND_URL || vercelUrl || 'http://localhost:5173').replace(/\/$/, ''),
   corsOrigins: (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
   demoMode: bool(process.env.DEMO_MODE),
-  resend: {
-    apiKey: process.env.RESEND_API_KEY || '',
-    from: process.env.EMAIL_FROM || 'APC Lagos Agent Registration <onboarding@resend.dev>',
-    replyTo: process.env.EMAIL_REPLY_TO || '',
-    adminTo: process.env.ADMIN_NOTIFICATION_EMAIL || '',
+  // Outgoing email over SMTP (Nodemailer). Validated in services/email.js.
+  smtp: {
+    host: (process.env.SMTP_HOST || '').trim(),
+    port: Number(process.env.SMTP_PORT) || 587,
+    // Defaults to implicit TLS on 465 and STARTTLS otherwise.
+    secure: process.env.SMTP_SECURE ? bool(process.env.SMTP_SECURE) : Number(process.env.SMTP_PORT) === 465,
+    user: (process.env.SMTP_USER || '').trim(),
+    pass: process.env.SMTP_PASS || '',
+    // EMAIL_FROM may be a bare address or "Name <address>"; MAIL_FROM is accepted for older .env files.
+    from: (process.env.EMAIL_FROM || process.env.MAIL_FROM || '').trim(),
+    fromName: (process.env.EMAIL_FROM_NAME || '').trim(),
+    replyTo: (process.env.EMAIL_REPLY_TO || '').trim(),
+    adminTo: (process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || '').trim(),
   },
   // Encrypts NIN values when that field is switched on (shared/agentForm.js).
   dataEncryptionKey: process.env.DATA_ENCRYPTION_KEY || '',
@@ -43,4 +51,3 @@ export const env = {
   },
 };
 
-export const emailConfigured = () => Boolean(env.resend.apiKey);

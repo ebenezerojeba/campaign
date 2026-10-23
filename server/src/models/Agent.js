@@ -60,9 +60,12 @@ const agentSchema = new Schema(
     lastName: { type: String, required: true, trim: true, maxlength: 60 },
     email: { type: String, required: true, trim: true, lowercase: true, maxlength: 120 },
     phone: { type: String, required: true }, // normalised +234XXXXXXXXXX
-    dateOfBirth: String, // YYYY-MM-DD, only when the field is switched on
-    // NIN is encrypted at rest (AES-256-GCM). The last 4 digits are kept for
-    // search, and a keyed hash finds duplicates without revealing the number.
+    // Stored as midnight UTC on the date given. Records made before October
+    // 2026 may hold a YYYY-MM-DD string; readers accept both.
+    dateOfBirth: Date,
+    // NIN, VIN, party registration number and bank details are encrypted at
+    // rest (AES-256-GCM). Only the last 4 characters are kept in clear for
+    // display, and keyed hashes find duplicates without revealing values.
     nin: {
       encrypted: { type: String, select: false },
       last4: String,
@@ -75,10 +78,11 @@ const agentSchema = new Schema(
       accountNumberLast4: String,
     },
     identityDetails: {
-      voterRegistrationNumberEncrypted: { type: String, select: false },
-      voterRegistrationNumberLast4: String,
-      apcPartyCardNumberEncrypted: { type: String, select: false },
-      apcPartyCardNumberLast4: String,
+      vinEncrypted: { type: String, select: false },
+      vinLast4: String,
+      vinHash: { type: String, select: false },
+      apcPartyRegistrationNumberEncrypted: { type: String, select: false },
+      apcPartyRegistrationNumberLast4: String,
     },
     stateOfOrigin: { type: String, required: true },
     lgaOfOrigin: { type: String, required: true },
@@ -106,7 +110,7 @@ const agentSchema = new Schema(
       sensitiveData: { type: Boolean, required: true },
       financialIdentity: { type: Boolean, default: false },
       declarationAccurate: { type: Boolean, required: true },
-      ageConfirmed: { type: Boolean, required: true },
+      ageConfirmed: Boolean, // collected before October 2026 only
       noticeVersion: String,
       at: { type: Date, default: Date.now },
     },
@@ -132,6 +136,7 @@ agentSchema.index({ stateOfOrigin: 1, lgaOfOrigin: 1 });
 agentSchema.index({ 'documents.pvc.sha256': 1 });
 agentSchema.index({ 'nin.last4': 1 });
 agentSchema.index({ 'nin.hash': 1 }, { unique: true, partialFilterExpression: { 'nin.hash': { $type: 'string' } } });
+agentSchema.index({ 'identityDetails.vinHash': 1 }, { unique: true, partialFilterExpression: { 'identityDetails.vinHash': { $type: 'string' } } });
 agentSchema.index({ createdAt: -1 });
 agentSchema.index({ isSample: 1 });
 

@@ -6,14 +6,15 @@ import zlib from 'node:zlib';
 
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret-that-is-long-enough-for-hs256-signing';
-process.env.RESEND_API_KEY = ''; // never send real email from tests
+process.env.SMTP_HOST = ''; // never send real email from tests
+process.env.DATA_ENCRYPTION_KEY = 'test-only-encryption-key-with-enough-entropy';
 process.env.ADMIN_NOTIFICATION_EMAIL = 'alerts@example.org';
 process.env.DEMO_MODE = '';
 
 const { MongoMemoryServer } = await import('mongodb-memory-server-core');
 const mongoose = (await import('mongoose')).default;
 const request = (await import('supertest')).default;
-const { roleSchema, registrationSchema } = await import('../../shared/schemas.js');
+const { roleSchema } = await import('../../shared/schemas.js');
 
 let mongo;
 let app;
@@ -57,13 +58,22 @@ const pvcImage = (shade = 90) => png(1000, 640, { shade });
 const valid = {
   firstName: 'Ngozi', middleName: '', lastName: 'Okafor', email: 'ngozi@example.com', phone: '0803 123 4567',
   stateOfOrigin: 'Anambra', lgaOfOrigin: 'Onitsha North',
-  dateOfBirth: '1990-05-17', agentCategory: 'pu_agent', state: 'Lagos', lga: 'Surulere', wardCode: '20-01', pollingUnitCode: '24-20-01-001',
-  ageConfirmed: true, declarationAccurate: true, consentProcessing: true, consentSensitive: true,
+  dateOfBirth: '1990-05-17', agentCategory: 'agent_1', state: 'Lagos', lga: 'Surulere', wardCode: '20-01', pollingUnitCode: '24-20-01-001',
+  nin: '12345678901', vin: '90F5B0D123456789012', apcPartyRegistrationNumber: 'LA/SUR/00123',
+  bankName: 'Zenith Bank', accountName: 'Ngozi Okafor', accountNumber: '0123456789',
+  declarationAccurate: true, consentProcessing: true, consentSensitive: true, consentFinancialIdentity: true,
 };
 
 // Sends a registration as the browser does: JSON fields in "data" plus files.
+// Other applicants (a different phone) get their own NIN and VIN unless a test sets them.
 function submit(data, files = {}) {
-  const req = request(app).post('/api/agents/register').field('data', JSON.stringify(data));
+  const body = { ...data };
+  if (body.phone !== valid.phone) {
+    const digits = String(body.phone).replace(/\D/g, '').slice(-10);
+    if (body.nin === valid.nin) body.nin = `9${digits}`;
+    if (body.vin === valid.vin) body.vin = `VIN${digits}`;
+  }
+  const req = request(app).post('/api/agents/register').field('data', JSON.stringify(body));
   const all = { passport: [passport, 'passport.png'], pvc: [pvcImage(), 'pvc.png'], ...files };
   for (const [name, file] of Object.entries(all)) if (file) req.attach(name, file[0], file[1]);
   return req;
@@ -110,8 +120,9 @@ describe('agent registration', () => {
     reference = res.body.data.reference;
     const saved = await Agent.findOne({ reference }).lean();
     assert.equal(saved.phone, '+2348031234567');
-    assert.equal(saved.dateOfBirth, '1990-05-17');
-    assert.equal(saved.agentCategory, 'pu_agent');
+    assert.ok(saved.dateOfBirth instanceof Date, 'date of birth is stored as a date');
+    assert.equal(saved.dateOfBirth.toISOString(), '1990-05-17T00:00:00.000Z');
+    assert.equal(saved.agentCategory, 'agent_1');
     assert.equal(saved.stateOfOrigin, 'Anambra');
     // Names come from the official data, never from the browser.
     assert.equal(saved.ward, 'ORILE');
@@ -146,30 +157,38 @@ describe('agent registration', () => {
     assert.ok(fieldsOf(res).agentCategory);
   });
 
-  test('rejects financial and identity details while their collection switch is off', () => {
-    const parsed = registrationSchema.safeParse({
-      ...valid,
-      bankName: 'Access Bank',
-      accountName: 'Ngozi Okafor',
-      accountNumber: '0123456789',
-      nin: '12345678901',
-      voterRegistrationNumber: 'AB-123456',
-      apcPartyCardNumber: 'APC-123456',
-    });
-    assert.equal(parsed.success, false);
-    assert.deepEqual(
-      ['bankName', 'accountName', 'accountNumber', 'nin', 'voterRegistrationNumber', 'apcPartyCardNumber']
-        .filter((key) => parsed.error.issues.some((issue) => issue.path[0] === key))
-        .sort(),
-      ['accountName', 'accountNumber', 'apcPartyCardNumber', 'bankName', 'nin', 'voterRegistrationNumber'],
-    );
+  test('requires every identification and bank field, with field-specific messages', async () => {
+    const keys = ['nin', 'vin', 'apcPartyRegistrationNumber', 'bankName', 'accountName', 'accountNumber', 'consentFinancialIdentity'];
+    const missing = Object.fromEntries(Object.entries(valid).filter(([k]) => !keys.includes(k)));
+    const res = await submit({ ...missing, phone: '08091110014', email: 'a14@example.com' });
+    assert.equal(res.status, 422);
+    assert.deepEqual(keys.filter((k) => fieldsOf(res)[k]), keys);
+    assert.equal(await Agent.exists({ email: 'a14@example.com' }), null, 'nothing is saved');
   });
 
-  test('requires date of birth and offers Agent 1 and Agent 2 instead of Agent', async () => {
+  test('rejects malformed account numbers without echoing the value', async () => {
+    for (const accountNumber of ['012345678', '01234567890', '01234 56789', '012345678a']) {
+      const res = await submit({ ...valid, phone: '08091110015', email: 'a15@example.com', accountNumber });
+      assert.equal(res.status, 422, accountNumber);
+      assert.match(fieldsOf(res).accountNumber, /exactly 10 digits/);
+      assert.ok(!JSON.stringify(res.body).includes(accountNumber), 'value not echoed');
+    }
+  });
+
+  test('requires a real, non-future date of birth and applies no age rule', async () => {
     const missingDob = await submit({ ...valid, phone: '08091110008', email: 'a8@example.com', dateOfBirth: undefined });
     assert.equal(missingDob.status, 422);
     assert.match(fieldsOf(missingDob).dateOfBirth, /date of birth/i);
+    const future = await submit({ ...valid, phone: '08091110008', email: 'a8@example.com', dateOfBirth: '2999-01-01' });
+    assert.match(fieldsOf(future).dateOfBirth, /cannot be in the future/);
+    const impossible = await submit({ ...valid, phone: '08091110008', email: 'a8@example.com', dateOfBirth: '1990-02-30' });
+    assert.match(fieldsOf(impossible).dateOfBirth, /real date/);
+    const { personalSchema } = await import('../../shared/schemas.js');
+    const young = personalSchema.safeParse({ ...valid, dateOfBirth: '2015-06-01' });
+    assert.equal(young.success, true, 'no invented minimum age');
+  });
 
+  test('offers only Agent 1 and Agent 2 as agent types', async () => {
     const legacyAgent = await submit({ ...valid, phone: '08091110009', email: 'a9@example.com', agentCategory: 'agent' });
     assert.equal(legacyAgent.status, 422);
     assert.ok(fieldsOf(legacyAgent).agentCategory);
@@ -316,7 +335,7 @@ describe('administration', () => {
     const count = async (qs) => (await admin.get(`/api/admin/agents?${qs}`)).body.meta.total;
     assert.equal(await count('q=Ngozi'), 2);
     assert.equal(await count('q=a8@example.com'), 1);
-    assert.equal(await count('agentCategory=pu_agent'), 2);
+    assert.equal(await count('agentCategory=agent_1'), 2);
     assert.equal(await count('agentCategory=canvasser'), 0);
     assert.equal(await count('lga=Surulere&wardCode=20-01&pollingUnitCode=24-20-01-001'), 2);
     assert.equal(await count('senatorialDistrict=LAGOS%20CENTRAL'), 2);
@@ -371,9 +390,19 @@ describe('administration', () => {
     assert.equal(res.status, 200);
     assert.match(res.text, /"'=HYPERLINK\(""http:\/\/evil""\)"/);
     const header = res.text.replace(/^﻿/, '').split('\r\n')[0].split(',');
-    for (const col of ['Agent category', 'Email', 'State of origin', 'Ward', 'Polling unit code', 'Passport photograph', "Voter's card"]) assert.ok(header.includes(col), col);
+    for (const col of ['Agent type', 'Email', 'Date of birth', 'State of origin', 'Ward', 'Polling unit code', 'Bank', 'Account number', 'NIN', 'VIN', 'APC party registration number', 'Passport photograph', "Voter's card"]) assert.ok(header.includes(col), col);
     assert.ok(!/sha256|fileId|GPS/i.test(res.text));
-    assert.match(res.text, /PU Agent/);
+    assert.match(res.text, /Agent 1/);
+    assert.match(res.text, /17\/05\/1990/);
+    // Masked by default: no full account number, NIN or VIN.
+    assert.match(res.text, /\*\*\*\*6789/);
+    for (const secret of [valid.accountNumber, valid.nin, valid.vin]) assert.ok(!res.text.includes(secret), 'masked by default');
+    // Full values only on explicit request by a role allowed to see them, and audited.
+    const full = await admin.get('/api/admin/exports/agents?sensitive=full');
+    assert.equal(full.status, 200);
+    for (const secret of [valid.accountNumber, valid.nin, valid.vin]) assert.ok(full.text.includes(secret));
+    const { AuditLog } = await import('../src/models/misc.js');
+    assert.ok(await AuditLog.exists({ action: 'agent.exported_sensitive' }));
   });
 
   test('admin can permanently delete a registration and its documents', async () => {

@@ -1,13 +1,13 @@
-import crypto from 'node:crypto';
-import { env, emailConfigured } from '../config/env.js';
+import { env } from '../config/env.js';
+import { emailConfigured } from '../services/email.js';
 import { dbConfigured, dbState, connectDb } from '../config/db.js';
 import { Agent } from '../models/Agent.js';
 import { ApiError, send } from '../utils/ApiError.js';
 import { generateReference } from '../utils/reference.js';
-import { encryptField } from '../utils/secure.js';
+import { encryptField, keyedHash } from '../utils/secure.js';
 import { normalisePhone } from '../../../shared/schemas.js';
 import { PRIVACY_NOTICE_VERSION, labelFor, REGISTRATION_STATUSES } from '../../../shared/options.js';
-import { OPTIONAL_FIELDS, requiredDocuments } from '../../../shared/agentForm.js';
+import { requiredDocuments } from '../../../shared/agentForm.js';
 import { sendRegistrationEmails } from '../services/email.js';
 import { resolveElectoral, wardsFor, pollingUnitsFor, senatorialDistricts } from '../services/electoral.js';
 import { checkDocument, storeDocument, deleteDocuments } from '../services/documents.js';
@@ -65,8 +65,7 @@ const DUPLICATE_MESSAGE = 'A registration with this phone number or email addres
 
 const fieldErrors = (fields) => new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields });
 
-// Keyed hash so duplicate NINs can be found without storing them in clear.
-const ninIndex = (nin) => crypto.createHmac('sha256', env.dataEncryptionKey).update(nin).digest('hex');
+const DUPLICATE_IDENTITY_MESSAGE = 'A registration with these identification details already exists. Check your registration status, or contact the team if you think this is a mistake.';
 
 export async function register(req, res) {
   const data = req.body;
@@ -95,29 +94,27 @@ export async function register(req, res) {
     throw fieldErrors({ pvc: 'This voter’s card file has already been used in another registration. Upload a photo of your own card.' });
   }
 
-  let nin;
-  let bankDetails;
-  let identityDetails;
-  if (OPTIONAL_FIELDS.nin || OPTIONAL_FIELDS.financialIdentityDetails) {
-    const encrypted = encryptField(data.nin); // fails clearly if no key is configured
-    const hash = ninIndex(data.nin);
-    if (await Agent.exists({ 'nin.hash': hash })) throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
-    nin = { encrypted, last4: data.nin.slice(-4), hash };
+  // Identity and bank values are encrypted; keyed hashes catch a NIN or VIN
+  // that is already registered without storing either in clear.
+  const ninHash = keyedHash('nin', data.nin);
+  const vinHash = keyedHash('vin', data.vin);
+  if (await Agent.exists({ $or: [{ 'nin.hash': ninHash }, { 'identityDetails.vinHash': vinHash }] })) {
+    throw ApiError.conflict(DUPLICATE_IDENTITY_MESSAGE, 'DUPLICATE_REGISTRATION');
   }
-  if (OPTIONAL_FIELDS.financialIdentityDetails) {
-    bankDetails = {
-      bankName: data.bankName,
-      accountNameEncrypted: encryptField(data.accountName),
-      accountNumberEncrypted: encryptField(data.accountNumber),
-      accountNumberLast4: data.accountNumber.slice(-4),
-    };
-    identityDetails = {
-      voterRegistrationNumberEncrypted: encryptField(data.voterRegistrationNumber),
-      voterRegistrationNumberLast4: data.voterRegistrationNumber.slice(-4),
-      apcPartyCardNumberEncrypted: encryptField(data.apcPartyCardNumber),
-      apcPartyCardNumberLast4: data.apcPartyCardNumber.slice(-4),
-    };
-  }
+  const nin = { encrypted: encryptField(data.nin), last4: data.nin.slice(-4), hash: ninHash };
+  const bankDetails = {
+    bankName: data.bankName,
+    accountNameEncrypted: encryptField(data.accountName),
+    accountNumberEncrypted: encryptField(data.accountNumber),
+    accountNumberLast4: data.accountNumber.slice(-4),
+  };
+  const identityDetails = {
+    vinEncrypted: encryptField(data.vin),
+    vinLast4: data.vin.slice(-4),
+    vinHash,
+    apcPartyRegistrationNumberEncrypted: encryptField(data.apcPartyRegistrationNumber),
+    apcPartyRegistrationNumberLast4: data.apcPartyRegistrationNumber.slice(-4),
+  };
 
   const doc = {
     firstName: data.firstName,
@@ -125,7 +122,7 @@ export async function register(req, res) {
     lastName: data.lastName,
     email,
     phone,
-    dateOfBirth: OPTIONAL_FIELDS.dateOfBirth ? data.dateOfBirth : undefined,
+    dateOfBirth: new Date(`${data.dateOfBirth}T00:00:00Z`),
     nin,
     bankDetails,
     identityDetails,
@@ -138,9 +135,8 @@ export async function register(req, res) {
     consent: {
       processing: true,
       sensitiveData: true,
-      financialIdentity: OPTIONAL_FIELDS.financialIdentityDetails,
+      financialIdentity: true,
       declarationAccurate: true,
-      ageConfirmed: true,
       noticeVersion: PRIVACY_NOTICE_VERSION,
       at: new Date(),
     },

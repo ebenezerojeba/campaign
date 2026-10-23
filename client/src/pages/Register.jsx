@@ -3,18 +3,19 @@ import { Link } from 'react-router';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { m, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Check, Pencil, ShieldCheck, Clock, Camera, IdCard, Send, RotateCw, Info } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Pencil, ShieldCheck, Clock, Camera, IdCard, Send, RotateCw, Info, Landmark } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
-import { TextField, ChoiceGroup, Checkbox } from '../components/ui/Field.jsx';
+import { TextField, SelectField, Checkbox } from '../components/ui/Field.jsx';
+import { DateField } from '../components/ui/DateField.jsx';
 import { Combobox } from '../components/ui/Combobox.jsx';
 import { FileField } from '../components/ui/FileField.jsx';
 import { Alert } from '../components/ui/Feedback.jsx';
 import { RegistrationSuccess } from '../components/RegistrationSuccess.jsx';
-import { STEP_SCHEMAS, STEP_FIELDS } from '../../../shared/schemas.js';
+import { STEP_SCHEMAS, STEP_FIELDS, todayInLagos } from '../../../shared/schemas.js';
 import { LGA_NAMES, STATE } from '../../../shared/lagos.js';
 import { STATE_NAMES, lgasOfState, stateLabel } from '../../../shared/nigeria.js';
 import { AGENT_CATEGORIES, NIGERIAN_BANKS, REGISTRATION_CATEGORIES, labelFor } from '../../../shared/options.js';
-import { OPTIONAL_FIELDS, DOCUMENT_RULES, requiredDocuments } from '../../../shared/agentForm.js';
+import { DOCUMENT_RULES, requiredDocuments } from '../../../shared/agentForm.js';
 import { privacyNotice } from '../content/site.js';
 import { get, post } from '../lib/api.js';
 import { prepareFile, describeRules, acceptFor } from '../lib/documentFiles.js';
@@ -24,28 +25,32 @@ import { cx } from '../lib/format.js';
 const STEPS = [
   { title: 'Your details', short: 'Details' },
   { title: 'Your role and polling unit', short: 'Polling unit' },
+  { title: 'Identity and bank details', short: 'ID & bank' },
   { title: 'Your documents', short: 'Documents' },
   { title: 'Review and submit', short: 'Review' },
 ];
+
+// Step indexes.
+const IDENTITY_STEP = 2;
+const DOCUMENTS_STEP = 3;
+// Drafts never reach the identity step: those values are never saved on the device.
+const LAST_DRAFT_STEP = 1;
 
 const DRAFT_KEY = 'apc-agent-registration-draft';
 const SUCCESS_KEY = 'apc-agent-registration-success';
 // Never kept in the saved draft: consents, the honeypot and sensitive identifiers.
 const UNSAVED_FIELDS = [
-  'ageConfirmed', 'declarationAccurate', 'consentProcessing', 'consentSensitive', 'consentFinancialIdentity', 'website',
-  'nin', 'dateOfBirth', 'voterRegistrationNumber', 'apcPartyCardNumber', 'bankName', 'accountName', 'accountNumber',
+  'declarationAccurate', 'consentProcessing', 'consentSensitive', 'consentFinancialIdentity', 'website',
+  'nin', 'dateOfBirth', 'vin', 'apcPartyRegistrationNumber', 'bankName', 'accountName', 'accountNumber',
 ];
 
 const EMPTY = {
-  firstName: '', middleName: '', lastName: '', email: '', phone: '',
-  ...(OPTIONAL_FIELDS.dateOfBirth ? { dateOfBirth: '' } : {}),
-  ...(OPTIONAL_FIELDS.financialIdentityDetails
-    ? { nin: '', voterRegistrationNumber: '', apcPartyCardNumber: '', bankName: '', accountName: '', accountNumber: '', consentFinancialIdentity: false }
-    : OPTIONAL_FIELDS.nin ? { nin: '' } : {}),
+  firstName: '', middleName: '', lastName: '', dateOfBirth: '', email: '', phone: '',
+  nin: '', vin: '', apcPartyRegistrationNumber: '', bankName: '', accountName: '', accountNumber: '',
   stateOfOrigin: '', lgaOfOrigin: '',
   agentCategory: '', state: STATE, lga: '', wardCode: '', pollingUnitCode: '', electoralRequired: false,
   ward: '', pollingUnitName: '', senatorialDistrict: '',
-  ageConfirmed: false, declarationAccurate: false, consentProcessing: false, consentSensitive: false, website: '',
+  declarationAccurate: false, consentProcessing: false, consentSensitive: false, consentFinancialIdentity: false, website: '',
 };
 
 const DOC_COPY = {
@@ -87,7 +92,7 @@ const titleCase = (s = '') => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperC
 function Progress({ step, onJump, maxReached }) {
   return (
     <nav aria-label="Registration progress">
-      <ol className="grid grid-cols-4 gap-2">
+      <ol className="grid grid-cols-5 gap-2">
         {STEPS.map((s, i) => {
           const done = i < step;
           const current = i === step;
@@ -159,61 +164,21 @@ function StepPersonal({ register, errors, control, watch, setValue }) {
           error={errors.phone?.message}
           {...register('phone')}
         />
-        {OPTIONAL_FIELDS.dateOfBirth && (
-          <TextField label="Date of birth" type="date" autoComplete="bday" className="sm:max-w-xs" error={errors.dateOfBirth?.message} {...register('dateOfBirth')} />
-        )}
-        {OPTIONAL_FIELDS.nin && (
-          <TextField
-            label="National Identification Number (NIN)"
-            hint="The 11-digit number on your NIN slip or National ID card. It is encrypted when saved."
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={13}
-            className="sm:max-w-sm"
-            inputClassName="tabular tracking-wider"
-            error={errors.nin?.message}
-            {...register('nin')}
+        <Controller control={control} name="dateOfBirth" render={({ field }) => (
+          <DateField
+            label="Date of birth"
+            hint="For example, 17/05/1990. Type it or use the calendar."
+            className="sm:max-w-xs"
+            max={todayInLagos()}
+            min="1900-01-01"
+            value={field.value}
+            onChange={field.onChange}
+            onBlur={field.onBlur}
+            ref={field.ref}
+            error={errors.dateOfBirth?.message}
           />
-        )}
+        )} />
       </FieldGroup>
-
-      {OPTIONAL_FIELDS.financialIdentityDetails ? (
-        <>
-          <FieldGroup title="Bank details" description="Enter the banking information requested by the programme. Account details are not verified by this form.">
-            <Controller control={control} name="bankName" render={({ field }) => (
-              <Combobox
-                label="Bank name"
-                placeholder="Type to search Nigerian banks"
-                options={NIGERIAN_BANKS}
-                value={field.value}
-                onBlur={field.onBlur}
-                ref={field.ref}
-                onChange={field.onChange}
-                error={errors.bankName?.message}
-              />
-            )} />
-            <TextField label="Account name" autoComplete="name" maxLength={100} error={errors.accountName?.message} {...register('accountName')} />
-            <TextField
-              label="Account number"
-              hint="Enter exactly 10 digits. This checks the format only; it does not verify the account or account name."
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={10}
-              error={errors.accountNumber?.message}
-              {...register('accountNumber')}
-            />
-          </FieldGroup>
-          <FieldGroup title="Identification details" description="Enter the numbers exactly as printed on your documents.">
-            <TextField label="National Identification Number (NIN)" hint="Exactly 11 digits." inputMode="numeric" autoComplete="off" maxLength={11} error={errors.nin?.message} {...register('nin')} />
-            <TextField label="Voter registration number" hint="Format pending verification against the official voter card format." autoComplete="off" maxLength={40} error={errors.voterRegistrationNumber?.message} {...register('voterRegistrationNumber')} />
-            <TextField label="APC party card number" hint="Format pending verification against the official party card format." autoComplete="off" maxLength={40} error={errors.apcPartyCardNumber?.message} {...register('apcPartyCardNumber')} />
-          </FieldGroup>
-        </>
-      ) : (
-        <Alert tone="info" title="Bank and identification details are not being collected">
-          These additional fields remain switched off until their approved collection purposes and privacy notice are provided. No bank account verification service is configured.
-        </Alert>
-      )}
 
       <FieldGroup title="Where you are from" description="Your state and Local Government Area of origin.">
         <Controller control={control} name="stateOfOrigin" render={({ field }) => (
@@ -282,7 +247,81 @@ function LoadError({ what, onRetry }) {
   );
 }
 
-function StepRole({ errors, control, watch, setValue }) {
+function StepIdentity({ register, errors, control }) {
+  return (
+    <div className="grid gap-10">
+      <Alert tone="info" title="Why we ask for these details">
+        Your NIN, VIN and APC party registration number let the team confirm your identity, voter registration and party membership. Your bank details are used only to pay any allowance due to you for your role. They are stored encrypted and only authorised administrators can see them. This form checks the format of each number; it does not verify them with NIMC, INEC, APC or your bank.
+      </Alert>
+
+      <FieldGroup title="Identification" description="Enter each number exactly as printed on your documents.">
+        <TextField
+          label="National Identification Number (NIN)"
+          hint="Exactly 11 digits, with no spaces."
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={11}
+          className="sm:max-w-sm"
+          inputClassName="tabular tracking-wider"
+          error={errors.nin?.message}
+          {...register('nin')}
+        />
+        <TextField
+          label="Voter Identification Number (VIN)"
+          hint="Printed next to “VIN” on your voter’s card. It is not the polling unit code or the card’s serial number. Format check pending official INEC rules."
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          maxLength={30}
+          inputClassName="font-mono tracking-wider"
+          error={errors.vin?.message}
+          {...register('vin')}
+        />
+        <TextField
+          label="APC party registration number"
+          hint="As shown on your APC membership card. Format check pending official APC rules."
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={40}
+          className="sm:max-w-sm"
+          inputClassName="font-mono"
+          error={errors.apcPartyRegistrationNumber?.message}
+          {...register('apcPartyRegistrationNumber')}
+        />
+      </FieldGroup>
+
+      <FieldGroup title="Bank details" description="The account any allowance will be paid into. It should be in your own name.">
+        <Controller control={control} name="bankName" render={({ field }) => (
+          <Combobox
+            label="Bank name"
+            placeholder="Type to search Nigerian banks"
+            options={NIGERIAN_BANKS}
+            emptyText="No bank matches. Check the spelling, or contact the team if your bank is not listed."
+            value={field.value}
+            onBlur={field.onBlur}
+            ref={field.ref}
+            onChange={field.onChange}
+            error={errors.bankName?.message}
+          />
+        )} />
+        <TextField label="Account name" hint="The full name on the account, as your bank shows it." autoComplete="off" maxLength={100} error={errors.accountName?.message} {...register('accountName')} />
+        <TextField
+          label="Account number"
+          hint="Exactly 10 digits (NUBAN), with no spaces."
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={10}
+          className="sm:max-w-sm"
+          inputClassName="tabular tracking-wider"
+          error={errors.accountNumber?.message}
+          {...register('accountNumber')}
+        />
+      </FieldGroup>
+    </div>
+  );
+}
+
+function StepRole({ register, errors, control, watch, setValue }) {
   const [lga, wardCode, pollingUnitCode] = watch(['lga', 'wardCode', 'pollingUnitCode']);
   const clear = (...names) => names.forEach((n) => setValue(n, ''));
 
@@ -305,9 +344,15 @@ function StepRole({ errors, control, watch, setValue }) {
 
   return (
     <div className="grid gap-10">
-      <Controller control={control} name="agentCategory" render={({ field }) => (
-        <ChoiceGroup legend="Agent category" hint="Choose the role you have been asked to serve in." type="radio" name="agentCategory" options={REGISTRATION_CATEGORIES} value={field.value} onChange={field.onChange} error={errors.agentCategory?.message} />
-      )} />
+      <SelectField
+        label="Agent type"
+        hint="Choose the agent type you have been asked to serve as."
+        placeholder="Choose agent type"
+        options={REGISTRATION_CATEGORIES}
+        className="sm:max-w-sm"
+        error={errors.agentCategory?.message}
+        {...register('agentCategory')}
+      />
 
       <FieldGroup title="Your polling unit" description="Choose from the official INEC list for Lagos State.">
         <TextField label="State" value="Lagos State" readOnly disabled />
@@ -453,28 +498,30 @@ function StepReview({ values, files, errors, control, onEdit }) {
     <div className="grid gap-5">
       <ReviewSection title="Your details" step={0} onEdit={onEdit} rows={[
         ['Name', [values.firstName, values.middleName, values.lastName].filter(Boolean).join(' ')],
+        ['Date of birth', /^\d{4}-\d{2}-\d{2}$/.test(values.dateOfBirth) ? `${values.dateOfBirth.slice(8, 10)}/${values.dateOfBirth.slice(5, 7)}/${values.dateOfBirth.slice(0, 4)}` : ''],
         ['Email', values.email],
         ['Phone', values.phone],
-        ['Date of birth', values.dateOfBirth],
-        ['NIN', values.nin && `•••••••${values.nin.replace(/\s/g, '').slice(-4)}`],
-        ...(OPTIONAL_FIELDS.financialIdentityDetails ? [
-          ['Bank', labelFor(NIGERIAN_BANKS, values.bankName)],
-          ['Account name', values.accountName],
-          ['Account number', values.accountNumber && `••••••${values.accountNumber.slice(-4)}`],
-          ['Voter registration number', values.voterRegistrationNumber && `••••${values.voterRegistrationNumber.slice(-4)}`],
-          ['APC party card number', values.apcPartyCardNumber && `••••${values.apcPartyCardNumber.slice(-4)}`],
-        ] : []),
         ['Origin', values.lgaOfOrigin && `${values.lgaOfOrigin}, ${stateLabel(values.stateOfOrigin)}`],
       ]} />
       <ReviewSection title="Your role and polling unit" step={1} onEdit={onEdit} rows={[
-        ['Agent category', labelFor(AGENT_CATEGORIES, values.agentCategory)],
+        ['Agent type', labelFor(AGENT_CATEGORIES, values.agentCategory)],
         ['LGA', values.lga && `${values.lga}, Lagos State`],
         ['Ward', values.ward && `${values.ward} (${values.wardCode})`],
         ['Polling unit', values.pollingUnitName],
         ['Polling unit code', values.pollingUnitCode],
         ['Senatorial district', titleCase(values.senatorialDistrict)],
       ]} />
-      <ReviewSection title="Your documents" step={2} onEdit={onEdit}>
+      <ReviewSection title="Identity and bank details" step={IDENTITY_STEP} onEdit={onEdit} rows={[
+        ['NIN', values.nin],
+        ['VIN', values.vin],
+        ['APC party registration number', values.apcPartyRegistrationNumber],
+        ['Bank', labelFor(NIGERIAN_BANKS, values.bankName)],
+        ['Account name', values.accountName],
+        ['Account number', values.accountNumber],
+      ]}>
+        <p className="border-t border-line px-4 py-3 text-sm text-slate-500 sm:px-5">Check these carefully: they are saved exactly as you typed them.</p>
+      </ReviewSection>
+      <ReviewSection title="Your documents" step={DOCUMENTS_STEP} onEdit={onEdit}>
         <ul className="grid gap-4 p-4 sm:grid-cols-3 sm:p-5">
           {requiredDocuments().map((kind) => (
             <li key={kind} className="flex items-center gap-3 sm:flex-col sm:items-start">
@@ -496,9 +543,6 @@ function StepReview({ values, files, errors, control, onEdit }) {
       </section>
 
       <div className="grid gap-3">
-        <Controller control={control} name="ageConfirmed" render={({ field }) => (
-          <Checkbox checked={field.value} onChange={field.onChange} error={errors.ageConfirmed?.message}>I confirm that I am 18 years or older.</Checkbox>
-        )} />
         <Controller control={control} name="declarationAccurate" render={({ field }) => (
           <Checkbox checked={field.value} onChange={field.onChange} error={errors.declarationAccurate?.message}>
             I confirm that the details I have given are accurate, and that the passport photograph and voter’s card are my own and unaltered.
@@ -506,16 +550,14 @@ function StepReview({ values, files, errors, control, onEdit }) {
         )} />
         <Controller control={control} name="consentSensitive" render={({ field }) => (
           <Checkbox checked={field.value} onChange={field.onChange} error={errors.consentSensitive?.message}>
-            I consent to APC Lagos storing my passport photograph and voter’s card{OPTIONAL_FIELDS.nin || OPTIONAL_FIELDS.financialIdentityDetails ? ', and my NIN,' : ''} so that authorised staff can verify my registration.
+            I consent to APC Lagos storing my passport photograph and voter’s card so that authorised staff can verify my registration.
           </Checkbox>
         )} />
-        {OPTIONAL_FIELDS.financialIdentityDetails && (
-          <Controller control={control} name="consentFinancialIdentity" render={({ field }) => (
-            <Checkbox checked={field.value} onChange={field.onChange} error={errors.consentFinancialIdentity?.message}>
-              I consent to the use of my banking and identification details as described in the approved privacy notice.
-            </Checkbox>
-          )} />
-        )}
+        <Controller control={control} name="consentFinancialIdentity" render={({ field }) => (
+          <Checkbox checked={field.value} onChange={field.onChange} error={errors.consentFinancialIdentity?.message}>
+            I consent to APC Lagos storing my NIN, VIN, APC party registration number and bank details, encrypted, so that authorised administrators can verify my registration and pay any allowance due to me.
+          </Checkbox>
+        )} />
         <Controller control={control} name="consentProcessing" render={({ field }) => (
           <Checkbox checked={field.value} onChange={field.onChange} error={errors.consentProcessing?.message}>
             I agree that APC Lagos may use the information in this form to register me as a polling unit agent and contact me about it, as described in the privacy notice.
@@ -530,8 +572,8 @@ export default function Register() {
   const config = useConfig();
   const [success, setSuccess] = useState(() => storage.read(SUCCESS_KEY));
   const [draft] = useState(() => storage.read(DRAFT_KEY));
-  const [step, setStep] = useState(() => Math.min(draft?.step ?? 0, 1)); // documents are never in a draft
-  const [maxReached, setMaxReached] = useState(() => Math.min(draft?.maxReached ?? 0, 1));
+  const [step, setStep] = useState(() => Math.min(draft?.step ?? 0, LAST_DRAFT_STEP));
+  const [maxReached, setMaxReached] = useState(() => Math.min(draft?.maxReached ?? 0, LAST_DRAFT_STEP));
   const [submitError, setSubmitError] = useState(null);
   const [files, setFiles] = useState({});
   const [fileErrors, setFileErrors] = useState({});
@@ -557,7 +599,7 @@ export default function Register() {
 
   // Save text answers (never documents, consents or sensitive identifiers) so a dropped connection loses little.
   useEffect(() => {
-    const sub = watch((values) => storage.write(DRAFT_KEY, { values: savable(values), step: Math.min(stepRef.current, 1), maxReached: Math.min(maxReached, 1) }));
+    const sub = watch((values) => storage.write(DRAFT_KEY, { values: savable(values), step: Math.min(stepRef.current, LAST_DRAFT_STEP), maxReached: Math.min(maxReached, LAST_DRAFT_STEP) }));
     return () => sub.unsubscribe();
   }, [watch, maxReached]);
 
@@ -565,7 +607,7 @@ export default function Register() {
     if (firstRender.current) { firstRender.current = false; return; }
     headingRef.current?.focus({ preventScroll: true });
     headingRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-    storage.write(DRAFT_KEY, { values: savable(getValues()), step: Math.min(step, 1), maxReached: Math.min(maxReached, 1) });
+    storage.write(DRAFT_KEY, { values: savable(getValues()), step: Math.min(step, LAST_DRAFT_STEP), maxReached: Math.min(maxReached, LAST_DRAFT_STEP) });
   }, [step, getValues, maxReached]);
 
   const goTo = (next) => {
@@ -582,7 +624,7 @@ export default function Register() {
 
   const submitRegistration = async (values) => {
     setSubmitError(null);
-    if (missingDocuments()) { goTo(2); return; }
+    if (missingDocuments()) { goTo(DOCUMENTS_STEP); return; }
     const body = new FormData();
     body.append('data', JSON.stringify(values));
     for (const kind of requiredDocuments()) body.append(kind, files[kind].blob, files[kind].filename);
@@ -614,7 +656,7 @@ export default function Register() {
   };
 
   const onContinue = handleSubmit(() => {
-    if (step === 2 && missingDocuments()) return;
+    if (step === DOCUMENTS_STEP && missingDocuments()) return;
     goTo(step + 1);
   });
   const onSubmit = handleSubmit(submitRegistration);
@@ -637,7 +679,7 @@ export default function Register() {
       <div className="container-page grid gap-8 lg:grid-cols-[1fr_320px] lg:gap-12">
         <div className="min-w-0">
           <h1 className="type-h2 text-forest-900">Polling unit agent registration</h1>
-          <p className="mt-3 text-slate-600">Step {step + 1} of {STEPS.length}. Your typed answers are kept on this device until you submit. Documents are not saved, so add them in one sitting.</p>
+          <p className="mt-3 text-slate-600">Step {step + 1} of {STEPS.length}. Your contact and polling unit answers are kept on this device until you submit. Identity and bank details and documents are never saved on the device, so add them in one sitting.</p>
           <div className="mt-6"><Progress step={step} maxReached={maxReached} onJump={goTo} /></div>
 
           <form onSubmit={isLast ? onSubmit : onContinue} noValidate className="mt-8 rounded-[var(--radius-xl)] border border-line bg-paper p-5 shadow-soft sm:p-8">
@@ -652,8 +694,9 @@ export default function Register() {
               <m.div key={step} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.2 }} className="mt-7">
                 {step === 0 && <StepPersonal {...stepProps} />}
                 {step === 1 && <StepRole {...stepProps} />}
-                {step === 2 && <StepDocuments files={files} setFile={setFile} fileErrors={fileErrors} setFileError={setFileError} />}
-                {step === 3 && <StepReview values={getValues()} files={files} errors={errors} control={control} onEdit={goTo} />}
+                {step === IDENTITY_STEP && <StepIdentity {...stepProps} />}
+                {step === DOCUMENTS_STEP && <StepDocuments files={files} setFile={setFile} fileErrors={fileErrors} setFileError={setFileError} />}
+                {step === 4 && <StepReview values={getValues()} files={files} errors={errors} control={control} onEdit={goTo} />}
               </m.div>
             </AnimatePresence>
 
@@ -695,7 +738,8 @@ export default function Register() {
             <div className="rounded-[var(--radius-lg)] bg-forest-900 p-6 text-white">
               <h2 className="font-display text-xl font-semibold">Before you start</h2>
               <ul className="mt-4 space-y-4 text-[15px] text-green-50/85">
-                <li className="flex gap-3"><Clock className="mt-0.5 size-5 shrink-0 text-gold-500" aria-hidden />About ten minutes, four short steps.</li>
+                <li className="flex gap-3"><Clock className="mt-0.5 size-5 shrink-0 text-gold-500" aria-hidden />About ten minutes, five short steps.</li>
+                <li className="flex gap-3"><Landmark className="mt-0.5 size-5 shrink-0 text-gold-500" aria-hidden />Your NIN, VIN, APC party registration number and bank account details.</li>
                 <li className="flex gap-3"><Camera className="mt-0.5 size-5 shrink-0 text-gold-500" aria-hidden />A clear passport photograph on a plain background.</li>
                 <li className="flex gap-3"><IdCard className="mt-0.5 size-5 shrink-0 text-gold-500" aria-hidden />Your voter’s card, to photograph or scan.</li>
                 <li className="flex gap-3"><Info className="mt-0.5 size-5 shrink-0 text-gold-500" aria-hidden />An email address you can open, for your confirmation.</li>

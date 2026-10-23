@@ -113,7 +113,7 @@ export default function Overview() {
                 </details>
               )}
             </Card>
-            <Card title="Registrations by agent category">
+            <Card title="Registrations by agent type">
               <BarList items={data.byCategory.map((c) => ({ label: c.label, value: c.count }))} />
             </Card>
           </div>
@@ -121,7 +121,7 @@ export default function Overview() {
           <Card title="Recent registrations" actions={<Link to={`${base}/agents`} className="text-sm font-semibold text-green-700 hover:underline">View all</Link>} bodyClassName="p-0">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px]">
-                <thead className="border-b border-line bg-paper"><tr><th className={th}>Reference</th><th className={th}>Name</th><th className={th}>Category</th><th className={th}>LGA</th><th className={th}>Status</th><th className={th}>Registered</th></tr></thead>
+                <thead className="border-b border-line bg-paper"><tr><th className={th}>Reference</th><th className={th}>Name</th><th className={th}>Agent type</th><th className={th}>LGA</th><th className={th}>Status</th><th className={th}>Registered</th></tr></thead>
                 <tbody className="divide-y divide-line">
                   {data.recent.map((v) => (
                     <tr key={v._id} className="hover:bg-paper">

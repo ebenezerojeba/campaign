@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { STATE, LGA_NAMES } from './lagos.js';
 import { STATE_NAMES, isValidStateLga } from './nigeria.js';
 import { NIGERIAN_BANKS, REGISTRATION_CATEGORIES, valuesOf } from './options.js';
-import { OPTIONAL_FIELDS } from './agentForm.js';
 
 const NAME_RE = /^[\p{L}][\p{L}\p{M}' .-]*$/u;
 
@@ -41,64 +40,67 @@ export const WARD_CODE_RE = /^\d{2}-\d{2}$/;
 export const POLLING_UNIT_CODE_RE = /^\d{2}-\d{2}-\d{2}-\d{3}$/;
 export const NIN_RE = /^\d{11}$/;
 
-// Whole years between an ISO date and today.
-export function ageOn(isoDate, today = new Date()) {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return NaN;
-  let age = today.getUTCFullYear() - d.getUTCFullYear();
-  const m = today.getUTCMonth() - d.getUTCMonth();
-  if (m < 0 || (m === 0 && today.getUTCDate() < d.getUTCDate())) age -= 1;
-  return age;
+// Today's date in Lagos as YYYY-MM-DD, the latest allowed date of birth.
+export function todayInLagos(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
 
-const dateOfBirth = z.string({ required_error: 'Enter your date of birth' })
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter your date of birth')
-  .refine((v) => ageOn(v) >= 18, 'You must be 18 or older to register')
-  .refine((v) => ageOn(v) <= 110, 'Check the year of your date of birth');
+// True for a real calendar date written YYYY-MM-DD (rejects 2026-02-30).
+export function isRealDate(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const d = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso;
+}
 
+// No age rule is applied: APC Lagos has not supplied an official eligibility rule.
+const dateOfBirth = z.string({ required_error: 'Enter your date of birth' }).trim()
+  .min(1, 'Enter your date of birth')
+  .refine(isRealDate, 'Enter a real date in the format DD/MM/YYYY')
+  .refine((v) => !isRealDate(v) || v <= todayInLagos(), 'Your date of birth cannot be in the future')
+  .refine((v) => !isRealDate(v) || v >= '1900-01-01', 'Check the year of your date of birth');
+
+// Values are trimmed of surrounding spaces and otherwise kept exactly as typed:
+// malformed values are rejected, never silently corrected.
 const nin = z.string({ required_error: 'Enter your NIN' }).trim()
-  .regex(NIN_RE, 'Enter your 11-digit NIN without spaces');
+  .min(1, 'Enter your NIN')
+  .regex(NIN_RE, 'Your NIN must be exactly 11 digits, with no spaces or letters');
 const accountNumber = z.string({ required_error: 'Enter your account number' }).trim()
-  .regex(/^\d{10}$/, 'Enter the 10-digit account number without spaces');
-const identityNumber = (label) => z.string({ required_error: `Enter your ${label}` }).trim()
-  .min(3, `Enter your ${label}`)
-  .max(40, `${label[0].toUpperCase()}${label.slice(1)} must be 40 characters or fewer`)
-  .regex(/^[\p{L}\p{N}][\p{L}\p{N} /-]*$/u, `Use letters, numbers, spaces, hyphens or slashes in your ${label}`);
+  .min(1, 'Enter your account number')
+  .regex(/^\d{10}$/, 'Your account number must be exactly 10 digits, with no spaces or letters');
 const accountName = z.string({ required_error: 'Enter the account name' }).trim()
-  .min(2, 'Enter the account name')
+  .min(2, 'Enter the name on the bank account')
   .max(100, 'Account name must be 100 characters or fewer')
-  .regex(/^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N}' .&()/-]*$/u, 'Check the account name');
+  .regex(/^[\p{L}\p{M}][\p{L}\p{M}\p{N}' .&()/-]*$/u, 'Use letters, spaces, hyphens, apostrophes or full stops in the account name');
 
-const sensitiveDetailsDisabled = z.never().optional();
+// INEC and APC have not supplied official formats for these numbers (see
+// AUDIT_REPORT.md), so only conservative character and length checks apply.
+// Tighten them when official rules are provided.
+const vin = z.string({ required_error: 'Enter your VIN' }).trim()
+  .min(1, 'Enter your VIN')
+  .min(6, 'Enter your full VIN as printed on your voter’s card')
+  .max(30, 'Your VIN must be 30 characters or fewer')
+  .regex(/^[A-Za-z0-9]+(?: [A-Za-z0-9]+)*$/, 'Use only the letters and numbers shown on your voter’s card')
+  .refine((v) => /\d/.test(v), 'Your VIN contains numbers. Check you have entered it correctly');
+const apcPartyRegistrationNumber = z.string({ required_error: 'Enter your APC party registration number' }).trim()
+  .min(1, 'Enter your APC party registration number')
+  .min(3, 'Enter your full APC party registration number')
+  .max(40, 'Your APC party registration number must be 40 characters or fewer')
+  .regex(/^[A-Za-z0-9]+(?:[ /-][A-Za-z0-9]+)*$/, 'Use only letters, numbers, spaces, hyphens or slashes')
+  .refine((v) => /\d/.test(v), 'Your APC party registration number contains numbers. Check you have entered it correctly');
 
 export const personalSchema = z.object({
   firstName: name('first name'),
   middleName: z.union([z.literal(''), name('middle name')]).optional().default(''),
   lastName: name('last name'),
+  dateOfBirth,
   email: emailSchema,
   phone: phoneSchema,
   stateOfOrigin: z.enum(STATE_NAMES, { errorMap: () => ({ message: 'Choose your state of origin' }) }),
   lgaOfOrigin: z.string({ required_error: 'Choose your LGA of origin' }).trim().min(1, 'Choose your LGA of origin').max(80),
-  ...(OPTIONAL_FIELDS.dateOfBirth ? { dateOfBirth } : {}),
-  ...(OPTIONAL_FIELDS.financialIdentityDetails ? {
-    nin,
-    voterRegistrationNumber: identityNumber('voter registration number'),
-    apcPartyCardNumber: identityNumber('APC party card number'),
-    bankName: z.enum(valuesOf(NIGERIAN_BANKS), { errorMap: () => ({ message: 'Choose a bank from the list' }) }),
-    accountName,
-    accountNumber,
-  } : OPTIONAL_FIELDS.nin ? { nin } : {
-    nin: sensitiveDetailsDisabled,
-    voterRegistrationNumber: sensitiveDetailsDisabled,
-    apcPartyCardNumber: sensitiveDetailsDisabled,
-    bankName: sensitiveDetailsDisabled,
-    accountName: sensitiveDetailsDisabled,
-    accountNumber: sensitiveDetailsDisabled,
-  }),
 });
 
 export const roleSchema = z.object({
-  agentCategory: z.enum(valuesOf(REGISTRATION_CATEGORIES), { errorMap: () => ({ message: 'Choose your agent category' }) }),
+  agentCategory: z.enum(valuesOf(REGISTRATION_CATEGORIES), { errorMap: () => ({ message: 'Choose your agent type' }) }),
   state: z.literal(STATE, { errorMap: () => ({ message: 'Registration is for polling units in Lagos State' }) }),
   lga: z.enum(LGA_NAMES, { errorMap: () => ({ message: 'Choose your Local Government Area' }) }),
   // Chosen by INEC code. The server checks both against the official dataset
@@ -110,14 +112,20 @@ export const roleSchema = z.object({
   electoralRequired: z.boolean().optional().default(false),
 });
 
+export const identitySchema = z.object({
+  nin,
+  vin,
+  apcPartyRegistrationNumber,
+  bankName: z.enum(valuesOf(NIGERIAN_BANKS), { errorMap: () => ({ message: 'Choose your bank from the list' }) }),
+  accountName,
+  accountNumber,
+});
+
 export const consentSchema = z.object({
-  ageConfirmed: z.literal(true, { errorMap: () => ({ message: 'You must be 18 or older to register' }) }),
   declarationAccurate: z.literal(true, { errorMap: () => ({ message: 'Confirm that your details and documents are your own and accurate' }) }),
   consentProcessing: z.literal(true, { errorMap: () => ({ message: 'Agree to the privacy notice to submit your registration' }) }),
   consentSensitive: z.literal(true, { errorMap: () => ({ message: 'Agree to the use of your photograph and voter’s card for verification' }) }),
-  ...(OPTIONAL_FIELDS.financialIdentityDetails
-    ? { consentFinancialIdentity: z.literal(true, { errorMap: () => ({ message: 'Consent is required to submit these additional details' }) }) }
-    : { consentFinancialIdentity: sensitiveDetailsDisabled }),
+  consentFinancialIdentity: z.literal(true, { errorMap: () => ({ message: 'Agree to the use of your identification and bank details to submit your registration' }) }),
 });
 
 function refinePersonal(data, ctx) {
@@ -133,6 +141,7 @@ function refineRole(data, ctx) {
 
 export const registrationSchema = personalSchema
   .merge(roleSchema)
+  .merge(identitySchema)
   .merge(consentSchema)
   .extend({ website: z.string().max(0).optional() }) // honeypot: real people leave this empty
   .superRefine((data, ctx) => {
@@ -140,11 +149,12 @@ export const registrationSchema = personalSchema
     refineRole(data, ctx);
   });
 
-// Per-step schemas for the multi-step form. Step 3 (documents) holds files,
+// Per-step schemas for the multi-step form. Step 4 (documents) holds files,
 // which the form checks itself. The final step validates everything.
 export const STEP_SCHEMAS = [
   personalSchema.superRefine(refinePersonal),
   roleSchema.superRefine(refineRole),
+  identitySchema,
   z.object({}).passthrough(),
   registrationSchema,
 ];
@@ -152,6 +162,7 @@ export const STEP_SCHEMAS = [
 export const STEP_FIELDS = [
   Object.keys(personalSchema.shape),
   Object.keys(roleSchema.shape),
+  Object.keys(identitySchema.shape),
   ['passport', 'pvc', 'selfie'],
   Object.keys(consentSchema.shape),
 ];

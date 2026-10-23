@@ -23,3 +23,9 @@ export function decryptField(token) {
   decipher.setAuthTag(Buffer.from(tag, 'base64'));
   return Buffer.concat([decipher.update(Buffer.from(data, 'base64')), decipher.final()]).toString('utf8');
 }
+
+// Keyed hash (HMAC-SHA256) for finding duplicates of a sensitive value without
+// storing it in clear. `field` keeps hashes of different fields distinct.
+export function keyedHash(field, value) {
+  return crypto.createHmac('sha256', key()).update(`${field}:${value}`).digest('hex');
+}

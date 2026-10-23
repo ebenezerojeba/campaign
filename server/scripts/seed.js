@@ -14,7 +14,7 @@ import { connectDb, setMongoUri, dbConfigured } from '../src/config/db.js';
 import { startDevDatabase, stopDevDatabase } from '../src/config/devDb.js';
 import { Agent } from '../src/models/Agent.js';
 import { generateReference } from '../src/utils/reference.js';
-import { AGENT_CATEGORIES, PRIVACY_NOTICE_VERSION, valuesOf } from '../../shared/options.js';
+import { REGISTRATION_CATEGORIES, PRIVACY_NOTICE_VERSION, valuesOf } from '../../shared/options.js';
 import { STATE_NAMES, lgasOfState } from '../../shared/nigeria.js';
 import { wardsFor, pollingUnitsFor, resolveElectoral } from '../src/services/electoral.js';
 
@@ -69,7 +69,7 @@ function sampleAgents(count) {
       phone: `+23480${String(10000000 + i * 7919).slice(-8)}`,
       stateOfOrigin: origin,
       lgaOfOrigin: pick(lgasOfState(origin)),
-      agentCategory: pick(valuesOf(AGENT_CATEGORIES)),
+      agentCategory: pick(valuesOf(REGISTRATION_CATEGORIES)),
       state: 'Lagos',
       lga,
       ...electoral,

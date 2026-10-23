@@ -53,6 +53,8 @@ export default function Agents() {
   }
 
   const active = FILTER_KEYS.some((k) => params.get(k));
+  // Masked bank column, only for roles allowed to see identity and bank details.
+  const showBank = can(user, 'agents:sensitive:read');
   const exportQuery = new URLSearchParams([...params].filter(([k]) => k !== 'page'));
 
   return (
@@ -63,7 +65,21 @@ export default function Agents() {
         actions={can(user, 'agents:export') && (
           demo
             ? <span className={buttonClass({ variant: 'secondary', className: 'opacity-55' })} aria-disabled="true"><Download className="size-4" aria-hidden />Export CSV</span>
-            : <a href={`/api/admin/exports/agents?${exportQuery}`} className={buttonClass({ variant: 'secondary' })} download><Download className="size-4" aria-hidden />Export CSV</a>
+            : (
+              <>
+                <a href={`/api/admin/exports/agents?${exportQuery}`} className={buttonClass({ variant: 'secondary' })} download><Download className="size-4" aria-hidden />Export CSV (masked)</a>
+                {can(user, 'agents:sensitive:read') && (
+                  <a
+                    href={`/api/admin/exports/agents?${new URLSearchParams([...exportQuery, ['sensitive', 'full']])}`}
+                    className={buttonClass({ variant: 'secondary' })}
+                    download
+                    onClick={(e) => { if (!window.confirm('This file will contain full NIN, VIN, party registration and bank account numbers. The export is logged. Store it securely and delete it when no longer needed. Continue?')) e.preventDefault(); }}
+                  >
+                    <Download className="size-4" aria-hidden />Export with identity and bank details
+                  </a>
+                )}
+              </>
+            )
         )}
       />
 
@@ -80,9 +96,9 @@ export default function Agents() {
               <option value="">All statuses</option>
               {REGISTRATION_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
-            <label className="sr-only" htmlFor="f-category">Agent category</label>
+            <label className="sr-only" htmlFor="f-category">Agent type</label>
             <select id="f-category" className={selectCls} value={params.get('agentCategory') ?? ''} onChange={(e) => update({ agentCategory: e.target.value })}>
-              <option value="">All categories</option>
+              <option value="">All agent types</option>
               {AGENT_CATEGORIES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
             </select>
             <label className="sr-only" htmlFor="f-lga">LGA</label>
@@ -157,9 +173,9 @@ export default function Agents() {
               <caption className="sr-only">Polling unit agent registrations</caption>
               <thead className="border-b border-line bg-paper">
                 <tr>
-                  <th scope="col" className={th}>Reference</th><th scope="col" className={th}>Name</th><th scope="col" className={th}>Category</th>
+                  <th scope="col" className={th}>Reference</th><th scope="col" className={th}>Name</th><th scope="col" className={th}>Agent type</th>
                   <th scope="col" className={th}>Phone</th><th scope="col" className={th}>LGA</th><th scope="col" className={th}>Ward</th>
-                  <th scope="col" className={th}>Polling unit</th><th scope="col" className={th}>Status</th><th scope="col" className={th}>Registered</th>
+                  <th scope="col" className={th}>Polling unit</th>{showBank && <th scope="col" className={th}>Bank account</th>}<th scope="col" className={th}>Status</th><th scope="col" className={th}>Registered</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -174,6 +190,7 @@ export default function Agents() {
                     <td className={td}>{a.lga}</td>
                     <td className={`${td} max-w-[160px] truncate text-slate-600`} title={a.ward}>{a.ward ?? '–'}</td>
                     <td className={`${td} max-w-[200px] truncate text-slate-600`} title={a.pollingUnit ? `${a.pollingUnit} (${a.pollingUnitCode})` : undefined}>{a.pollingUnitCode ?? '–'}</td>
+                    {showBank && <td className={`${td} whitespace-nowrap text-slate-600`}>{a.bankDetails?.bankName ? <>{a.bankDetails.bankName} <span className="font-mono">••••{a.bankDetails.accountNumberLast4}</span></> : '–'}</td>}
                     <td className={td}><StatusBadge status={a.status} /></td>
                     <td className={`${td} whitespace-nowrap text-slate-500`}>{formatDate(a.createdAt)}</td>
                   </tr>
