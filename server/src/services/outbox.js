@@ -7,7 +7,8 @@
 //   concurrent senders can never queue or send the same email twice.
 // - Sends are claimed atomically with a short lease, counted against
 //   per-minute and per-hour budgets, and stop at once when the provider asks
-//   us to slow down (SMTP 4xx such as Hostinger's 451 domain rate limit).
+//   us to slow down (SMTP 4xx such as a 421/451 rate limit), and pause
+//   without using attempts when the provider refuses the login or sender.
 // - Temporary failures retry with bounded exponential backoff; permanent
 //   ones (5xx, bad address) do not. Nothing retries forever.
 // - Historical failures are never resent automatically.
@@ -25,9 +26,9 @@ export const RETRY_DELAYS_MIN = [5, 15, 45, 120, 360];
 export const MAX_ATTEMPTS = RETRY_DELAYS_MIN.length + 1;
 const LEASE_MS = 2 * 60 * 1000;
 // How long all sending pauses after the provider refuses for rate or capacity reasons.
-// A rate-limit pause is short because Hostinger's allowance refills
-// continuously (about 3 a minute); it is set by EMAIL_RATE_LIMIT_PAUSE_SECONDS.
-const PROVIDER_PAUSE_MS = { rateLimited: env.outbox.rateLimitPauseSeconds * 1000, auth: 30 * 60 * 1000, unreachable: 2 * 60 * 1000, notConfigured: 15 * 60 * 1000 };
+// A rate-limit pause is short because provider allowances refill
+// continuously; it is set by EMAIL_RATE_LIMIT_PAUSE_SECONDS.
+const PROVIDER_PAUSE_MS = { rateLimited: env.outbox.rateLimitPauseSeconds * 1000, auth: 30 * 60 * 1000, sender: 30 * 60 * 1000, unreachable: 2 * 60 * 1000, notConfigured: 15 * 60 * 1000 };
 
 const PRIORITY = { registration_confirmation: 1, decision: 2, admin_alert: 3, admin_digest: 3 };
 const STATE_ID = 'smtp';
@@ -104,13 +105,24 @@ async function takeBudget(now) {
 
 const TRANSIENT_CODES = new Set(['ETIMEDOUT', 'ECONNECTION', 'ESOCKET', 'EDNS', 'ETLS', 'ECONNRESET']);
 
+// Refusals about our sender or account rather than the recipient, e.g. Brevo's
+// "525 5.7.1 Unauthorized IP address" or "sender not valid, validate your sender".
+const SENDER_REFUSAL = /sender|unauthori[sz]ed ip|not (?:allowed|authori[sz]ed|permitted) to send|account (?:is )?(?:suspended|blocked|disabled|deactivated|not activated)|validate your/i;
+const RECIPIENT_PROBLEM = /recipient|mailbox|user unknown|no such user|does not exist/i;
+
 export function classify(result) {
   if (result.status === 'sent') return { kind: 'sent' };
   if (result.status === 'skipped') {
     return /not configured/i.test(result.error ?? '') ? { kind: 'retry', pause: 'notConfigured' } : { kind: 'permanent' };
   }
   const code = Number(result.smtpCode) || 0;
-  if (result.errorCode === 'EAUTH') return { kind: 'retry', pause: 'auth' };
+  // Account-level refusals (bad login, IP not allowed, sender or domain not
+  // verified, account suspended) say nothing about this email: pause all
+  // sending and hand the email back without using one of its attempts.
+  if (result.errorCode === 'EAUTH') return { kind: 'retry', pause: 'auth', keepAttempt: true };
+  if (code >= 500 && SENDER_REFUSAL.test(result.smtpReason ?? '') && !RECIPIENT_PROBLEM.test(result.smtpReason ?? '')) {
+    return { kind: 'retry', pause: 'sender', keepAttempt: true };
+  }
   if (code >= 400 && code < 500) return { kind: 'retry', pause: /rate ?limit|too many|try again later/i.test(result.smtpReason ?? '') || code === 421 || code === 451 ? 'rateLimited' : undefined };
   if (code >= 500) return { kind: 'permanent' };
   if (TRANSIENT_CODES.has(result.errorCode)) return { kind: 'retry', pause: 'unreachable' };
@@ -195,6 +207,11 @@ async function deliverOne(entry, now) {
     return { outcome: 'sent' };
   }
   if (verdict.pause) await pause(now, PROVIDER_PAUSE_MS[verdict.pause], verdict.pause);
+  if (verdict.keepAttempt) {
+    // Not this email's fault: back in the queue, attempt not counted, due when the pause ends.
+    await EmailOutbox.updateOne({ _id: entry._id }, { $set: { status: 'queued', nextAttemptAt: new Date(now.getTime() + PROVIDER_PAUSE_MS[verdict.pause]), ...diagnostics }, $unset: { leaseUntil: 1 }, $inc: { attempts: -1 } });
+    return { outcome: 'retry', pause: verdict.pause };
+  }
   if (verdict.kind === 'permanent' || entry.attempts >= MAX_ATTEMPTS) {
     await EmailOutbox.updateOne({ _id: entry._id }, { $set: { status: 'failed', ...diagnostics }, $unset: { leaseUntil: 1 } });
     await recordOnAgent(entry, { ...result, status: 'failed' });

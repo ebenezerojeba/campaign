@@ -59,6 +59,15 @@ test('reads SMTP settings from the environment and reports no problems', () => {
   assert.equal(email.emailConfigured(), true);
 });
 
+test('Brevo settings: port 587 uses STARTTLS, and the SMTP login is never used as the sender', () => {
+  const brevo = { host: 'smtp-relay.brevo.com', port: 587, secure: false, user: '818be0000@smtp-brevo.com', pass: 'not-a-real-key', from: 'notifications@apclagos.org', fromName: 'APC Lagos', replyTo: '', adminTo: '' };
+  assert.deepEqual(email.emailConfigProblems(brevo), []);
+  const missingFrom = email.emailConfigProblems({ ...brevo, from: '' });
+  assert.equal(missingFrom.length, 1);
+  assert.match(missingFrom[0], /EMAIL_FROM is not set/);
+  assert.ok(!missingFrom[0].includes('818be0000'), 'the login is not echoed');
+});
+
 test('reports missing or invalid settings without revealing values', () => {
   const problems = email.emailConfigProblems({ host: '', port: 0, user: '', pass: '', from: 'not an address', fromName: '', adminTo: 'bad' });
   assert.deepEqual(problems, [

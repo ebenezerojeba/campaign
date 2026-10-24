@@ -46,9 +46,9 @@ export const env = {
     replyTo: (process.env.EMAIL_REPLY_TO || '').trim(),
     adminTo: (process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || '').trim(),
   },
-  // Outbox pacing, kept under the SMTP provider's limits. Hostinger accepted
-  // roughly 3 messages a minute for apclagos.org once its domain rate limit
-  // engaged (23 Oct 2026).
+  // Outbox pacing, kept under the SMTP provider's limits. The defaults suit
+  // Hostinger (about 3 a minute for apclagos.org, 23 Oct 2026); raise them with
+  // EMAIL_MAX_PER_MINUTE / EMAIL_MAX_PER_HOUR to match a larger plan such as Brevo.
   outbox: {
     maxPerMinute: Number(process.env.EMAIL_MAX_PER_MINUTE) || 3,
     maxPerHour: Number(process.env.EMAIL_MAX_PER_HOUR) || 150,

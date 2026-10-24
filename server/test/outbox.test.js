@@ -288,3 +288,35 @@ test('admin alerts off: none queued, waiting ones cancelled unsent, applicants s
   const digest = await outbox.drainOutbox({ max: 5, now: at('2026-11-02T10:00:30Z') });
   assert.equal(digest.sent, 0, 'no hourly summary either');
 });
+
+test('Brevo account-level refusals pause sending and never use up or fail the queued emails', async () => {
+  const agent = await savedAgent();
+  await outbox.queueRegistrationEmails(agent);
+  await EmailOutbox.deleteOne({ type: 'admin_alert' });
+  const refusals = [
+    () => smtpError('EAUTH', 525, '525 5.7.1 Unauthorized IP address'),
+    () => smtpError('EENVELOPE', 550, '550 5.7.1 Sender is not valid. Please validate your sender'),
+    () => smtpError('EMESSAGE', 502, '502 5.7.0 Your account is suspended'),
+  ];
+  let clock = new Date('2026-11-02T08:00:00Z').getTime();
+  for (const refusal of refusals) {
+    behaviour = refusal;
+    const run = await outbox.drainOutbox({ max: 5, now: () => new Date(clock) });
+    assert.equal(run.retry, 1);
+    assert.equal(run.stoppedBy, 'paused', 'stops at once: every other email would be refused too');
+    const entry = await EmailOutbox.findOne({ type: 'registration_confirmation' }).lean();
+    assert.equal(entry.status, 'queued');
+    assert.equal(entry.attempts, 0, 'the refusal is not counted against the email');
+    clock += 31 * 60e3; // past the 30-minute pause
+  }
+  behaviour = null;
+  const later = await outbox.drainOutbox({ max: 5, now: () => new Date(clock) });
+  assert.equal(later.sent, 1);
+  assert.equal((await EmailOutbox.findOne({ type: 'registration_confirmation' }).lean()).status, 'sent');
+});
+
+test('a recipient refusal stays permanent even when the reply mentions the sender', async () => {
+  assert.equal(outbox.classify({ status: 'failed', errorCode: 'EENVELOPE', smtpCode: 550, smtpReason: '550 5.1.1 Recipient address rejected: mailbox does not exist' }).kind, 'permanent');
+  assert.equal(outbox.classify({ status: 'failed', errorCode: 'EENVELOPE', smtpCode: 550, smtpReason: '550 5.7.1 Sender not authorised' }).pause, 'sender');
+  assert.equal(outbox.classify({ status: 'failed', errorCode: 'EMESSAGE', smtpCode: 421, smtpReason: '421 4.7.0 Too many messages, try again later' }).pause, 'rateLimited');
+});

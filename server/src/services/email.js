@@ -41,6 +41,7 @@ export function emailConfigProblems(config = env.smtp) {
   if (!config.pass) problems.push('SMTP_PASS is not set');
   const { address } = senderFrom(config);
   if (!isSafeAddress(address)) problems.push('EMAIL_FROM is not a valid email address');
+  else if (/@smtp-brevo\.com$/i.test(address)) problems.push('EMAIL_FROM is not set: the Brevo SMTP login is not a sender address. Set EMAIL_FROM to the official sender, for example notifications@apclagos.org');
   else if (/@resend\.dev$/i.test(address)) problems.push('EMAIL_FROM still uses the old Resend test sender; set it to an address your SMTP account may send from');
   if (config.adminTo && !isSafeAddress(config.adminTo)) problems.push('ADMIN_NOTIFICATION_EMAIL is not a valid email address');
   return problems;
