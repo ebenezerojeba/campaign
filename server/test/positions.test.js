@@ -279,3 +279,15 @@ test('rate limits are counted in the shared database, so they hold across server
     delete process.env.RATE_LIMITS_IN_TESTS;
   }
 });
+
+test('sign-in lockout counts across the boundary between two time windows', async () => {
+  const throttle = await import('../src/services/throttle.js');
+  const windowMs = 15 * 60 * 1000;
+  const boundary = Math.ceil(Date.now() / windowMs) * windowMs;
+  for (let i = 0; i < 3; i += 1) await throttle.hit('boundary-test', 'k', windowMs, boundary - 1000);
+  const { hits } = await throttle.hit('boundary-test', 'k', windowMs, boundary + 1000);
+  assert.equal(hits, 4, 'attempts just before the boundary still count just after it');
+  assert.equal(await throttle.count('boundary-test', 'k', windowMs, boundary + windowMs + 1000), 1, 'older windows drop off');
+  await throttle.clear('boundary-test', 'k', windowMs, boundary + 1000);
+  assert.equal(await throttle.count('boundary-test', 'k', windowMs, boundary + 1000), 0);
+});

@@ -82,6 +82,10 @@ test('reads a VIN from card text, with spaces, a label and look-alike characters
   assert.equal(card.compareVin('90F5B0D5D8295386981', candidates).result, 'close', 'one character differs');
   assert.equal(card.compareVin('11A1111111111111111', candidates).result, 'mismatch');
   assert.equal(card.compareVin('90F5B0D5D8295386987', []).result, 'unreadable');
+  // Noise from a poor photo is never reported as a mismatch.
+  assert.equal(card.compareVin('90F5B0D5D8295386987', ['OKONKWOADAEZEVOTER1', 'COMMISSIONVOTERSCAR', 'AB12CD34EF']).result, 'unreadable');
+  // A VIN-shaped reading only a few characters off is too uncertain to call either way.
+  assert.equal(card.compareVin('90F5B0D5D8295386987', ['90F5B0D5D8295300000']).result, 'unreadable');
   assert.equal(card.nameFound(text, 'Okonkwo'), true);
   assert.equal(card.nameFound(text, 'Okonkwa'), true, 'one misread letter allowed for longer names');
   assert.equal(card.nameFound(text, 'Bello'), false);

@@ -8,23 +8,31 @@ const windowOf = (windowMs, now) => Math.floor(now / windowMs);
 const idFor = (name, key, windowMs, now) => `${name}:${hashed(key)}:${windowOf(windowMs, now)}`;
 const resetAt = (windowMs, now) => new Date((windowOf(windowMs, now) + 1) * windowMs);
 
-// Adds one hit and returns the total for the current window.
-export async function hit(name, key, windowMs, now = Date.now()) {
+// Counts are kept for one extra window, so a limit cannot be dodged by
+// spreading attempts across the boundary between two windows.
+async function bump(name, key, windowMs, now) {
   const doc = await RateLimit.findOneAndUpdate(
     { _id: idFor(name, key, windowMs, now) },
-    { $inc: { hits: 1 }, $setOnInsert: { expiresAt: resetAt(windowMs, now) } },
+    { $inc: { hits: 1 }, $setOnInsert: { expiresAt: new Date(resetAt(windowMs, now).getTime() + windowMs) } },
     { upsert: true, new: true, lean: true },
   );
-  return { hits: doc.hits, resetAt: resetAt(windowMs, now) };
+  return doc.hits;
 }
 
+// Hits in this window and the previous one together.
 export async function count(name, key, windowMs, now = Date.now()) {
-  const doc = await RateLimit.findById(idFor(name, key, windowMs, now)).lean();
-  return doc?.hits ?? 0;
+  const docs = await RateLimit.find({ _id: { $in: [idFor(name, key, windowMs, now), idFor(name, key, windowMs, now - windowMs)] } }).lean();
+  return docs.reduce((t, d) => t + d.hits, 0);
+}
+
+// Adds one hit and returns the total for this window and the previous one.
+export async function hit(name, key, windowMs, now = Date.now()) {
+  await bump(name, key, windowMs, now);
+  return { hits: await count(name, key, windowMs, now), resetAt: resetAt(windowMs, now) };
 }
 
 export async function clear(name, key, windowMs, now = Date.now()) {
-  await RateLimit.deleteOne({ _id: idFor(name, key, windowMs, now) });
+  await RateLimit.deleteMany({ _id: { $in: [idFor(name, key, windowMs, now), idFor(name, key, windowMs, now - windowMs)] } });
 }
 
 // A store for express-rate-limit, so limits hold across Vercel instances.
@@ -39,8 +47,8 @@ export class MongoRateLimitStore {
   }
 
   async increment(key) {
-    const { hits, resetAt: resetTime } = await hit(this.name, key, this.windowMs);
-    return { totalHits: hits, resetTime };
+    const now = Date.now();
+    return { totalHits: await bump(this.name, key, this.windowMs, now), resetTime: resetAt(this.windowMs, now) };
   }
 
   async decrement(key) {

@@ -21,6 +21,8 @@ function parseUrl() {
 }
 
 export function enabled() {
+  // Tests never touch a real Cloudinary account, even if CLOUDINARY_URL is in .env.
+  if (configured === null && process.env.NODE_ENV === 'test') return false;
   if (configured === null) {
     const creds = parseUrl();
     configured = Boolean(creds);

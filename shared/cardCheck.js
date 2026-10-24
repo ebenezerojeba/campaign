@@ -49,17 +49,31 @@ export function vinCandidates(text, max = 6) {
   return found.slice(0, max);
 }
 
+// A reading that looks like a real VIN: about 19 characters, mostly digits.
+// Anything else is probably text recognition noise from a poor photo.
+const plausibleVin = (c) => {
+  const s = normaliseVin(c);
+  return s.length >= VIN_LENGTH - 1 && s.length <= VIN_LENGTH + 1 && (s.match(/\d/g) ?? []).length >= 8;
+};
+
+// "mismatch" is reserved for a clean, VIN-shaped reading that is clearly a
+// different number; uncertain or noisy readings count as "unreadable", so a
+// poor photo never tells an applicant their correct VIN is wrong.
 export function compareVin(typed, candidates) {
   const want = canonical(typed);
   if (!want || !candidates?.length) return { result: 'unreadable', distance: null };
   let best = Infinity;
   let bestCandidate = null;
+  let bestPlausible = Infinity;
   for (const c of candidates) {
     const d = distance(want, canonical(c));
     if (d < best) { best = d; bestCandidate = c; }
+    if (plausibleVin(c) && d < bestPlausible) bestPlausible = d;
   }
-  const result = best === 0 ? 'match' : best <= 2 ? 'close' : 'mismatch';
-  return { result, distance: best, read: normaliseVin(bestCandidate) };
+  if (best === 0) return { result: 'match', distance: 0, read: normaliseVin(bestCandidate) };
+  if (best <= 2) return { result: 'close', distance: best, read: normaliseVin(bestCandidate) };
+  if (bestPlausible >= 8 && bestPlausible !== Infinity) return { result: 'mismatch', distance: bestPlausible, read: normaliseVin(candidates.find((c) => plausibleVin(c) && distance(want, canonical(c)) === bestPlausible)) };
+  return { result: 'unreadable', distance: best };
 }
 
 // Whether a name appears in the recognised text (allowing one misread letter).
