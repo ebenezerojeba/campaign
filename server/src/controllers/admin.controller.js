@@ -7,9 +7,10 @@ import { toCsv } from '../utils/csv.js';
 import { decryptField } from '../utils/secure.js';
 import { audit } from '../services/audit.js';
 import { queueDecisionEmail, kickOutbox, drainOutbox, outboxStatus } from '../services/outbox.js';
-import { openDocument, deleteDocuments } from '../services/documents.js';
+import { openDocument, deleteDocuments, hasDocument } from '../services/documents.js';
 import * as throttle from '../services/throttle.js';
 import { claimPosition, releasePosition, positionEffect, positionFor, positionConflicts } from '../services/positions.js';
+import { recordReviewerCheck, latestChecks } from '../services/identityChecks.js';
 import { issueStaffSession, clearSession, readStaffToken, STAFF_COOKIE } from '../middleware/index.js';
 import { normalisePhone, POLLING_UNIT_CODE_RE } from '../../../shared/schemas.js';
 import { labelFor, AGENT_CATEGORIES, DOCUMENT_KINDS } from '../../../shared/options.js';
@@ -192,7 +193,7 @@ export async function listAgents(req, res) {
 
 // File ids and hashes stay on the server; the dashboard asks for documents by kind.
 const publicDocuments = (documents = {}) => Object.fromEntries(
-  Object.entries(documents).filter(([, d]) => d?.fileId).map(([kind, d]) => [kind, { contentType: d.contentType, bytes: d.bytes, width: d.width, height: d.height, uploadedAt: d.uploadedAt }]),
+  Object.entries(documents).filter(([, d]) => hasDocument(d)).map(([kind, d]) => [kind, { contentType: d.contentType, bytes: d.bytes, width: d.width, height: d.height, uploadedAt: d.uploadedAt }]),
 );
 
 export async function getAgent(req, res) {
@@ -214,8 +215,18 @@ export async function getAgent(req, res) {
       : undefined,
     documents: publicDocuments(a.documents),
     position: await positionFor(a),
+    checks: await latestChecks(a._id),
     auditTrail,
   });
+}
+
+// Records a voter's card and face check run in the reviewer's browser. The VIN
+// comparison is made here against the stored value; only the outcome is kept.
+export async function runIdentityCheck(req, res) {
+  const check = await recordReviewerCheck(req.params.id, req.body, req.user);
+  if (!check) throw ApiError.notFound('This registration does not exist');
+  await audit(req, { action: 'agent.identity_checked', targetType: 'Agent', targetId: check.agent, summary: `Card check: VIN ${check.vin.result}, face ${check.face.result}`, meta: { vin: check.vin.result, face: check.face.result, name: check.name, dateOfBirth: check.dateOfBirth } });
+  send(res, (await latestChecks(check.agent)));
 }
 
 // Polling-unit positions with more than one Pending or Approved registration.
@@ -254,8 +265,16 @@ export async function getAgentDocument(req, res) {
   if (!DOCUMENT_KINDS.some((k) => k.value === kind)) throw ApiError.notFound();
   const a = await Agent.findById(req.params.id).select(`reference documents.${kind}`).lean();
   const d = a?.documents?.[kind];
-  if (!d?.fileId) throw ApiError.notFound('This document is not on file');
+  if (!hasDocument(d)) throw ApiError.notFound('This document is not on file');
   await audit(req, { action: 'agent.document_viewed', targetType: 'Agent', targetId: a._id, summary: `Opened ${labelFor(DOCUMENT_KINDS, kind).toLowerCase()} for ${a.reference}` });
+
+  let stream;
+  try {
+    stream = await openDocument(d);
+  } catch (err) {
+    console.error('[documents] open failed', err?.status ?? err?.name);
+    throw new ApiError(502, 'DOCUMENT_UNAVAILABLE', 'This document could not be loaded. Try again shortly.');
+  }
 
   const disposition = d.contentType === 'application/pdf' ? 'attachment' : 'inline';
   res.setHeader('Content-Type', d.contentType);
@@ -264,9 +283,9 @@ export async function getAgentDocument(req, res) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-  openDocument(new mongoose.Types.ObjectId(d.fileId))
+  stream
     .on('error', (err) => {
-      console.error('[documents] read failed', err.message);
+      console.error('[documents] read failed', err?.name);
       if (!res.headersSent) res.status(404).end(); else res.destroy();
     })
     .pipe(res);
@@ -274,10 +293,19 @@ export async function getAgentDocument(req, res) {
 
 export async function updateAgentStatus(req, res) {
   const { status, reason, notify } = req.body;
-  const current = await Agent.findById(req.params.id).select('status reference pollingUnitCode agentCategory').lean();
+  const current = await Agent.findById(req.params.id).select('status reference pollingUnitCode agentCategory isSample').lean();
   if (!current) throw ApiError.notFound('This registration does not exist');
   const from = current.status;
   if (from === status) throw ApiError.conflict(`This registration is already ${status}`);
+
+  // Approval needs a reviewer's card and face check, and a reason when it raised a flag.
+  if (status === 'approved' && !current.isSample) {
+    const { reviewer, applicant } = await latestChecks(current._id);
+    if (!reviewer) throw ApiError.conflict('Run the voter’s card and face check before approving.', 'CHECK_REQUIRED');
+    if ((reviewer.flagged || applicant?.flagged) && !reason?.trim()) {
+      throw new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields: { reason: 'The card or face check raised a flag. Give a reason for approving anyway.' } });
+    }
+  }
 
   // Approving or reinstating needs the polling-unit position; rejecting or
   // cancelling gives it up.
@@ -338,14 +366,14 @@ export async function deleteAgent(req, res) {
   if (!a) throw ApiError.notFound('This registration does not exist');
   // Typing the reference confirms a permanent deletion.
   if (a.reference !== req.body.confirmReference) throw ApiError.badRequest('Type the registration reference exactly to confirm deletion');
-  await deleteDocuments(Object.values(a.documents ?? {}).map((d) => d?.fileId));
+  await deleteDocuments(Object.values(a.documents ?? {}));
   await Agent.deleteOne({ _id: a._id });
   await releasePosition(a._id, a.pollingUnitCode, a.agentCategory);
   await audit(req, { action: 'agent.deleted', targetType: 'Agent', targetId: a._id, summary: `Deleted ${a.reference} and its documents`, meta: { reason: req.body.reason } });
   send(res, { deleted: true });
 }
 
-const onFile = (a, kind) => (a.documents?.[kind]?.fileId ? 'on file' : '');
+const onFile = (a, kind) => (hasDocument(a.documents?.[kind]) ? 'on file' : '');
 
 // Documents are never exported. Identity and bank values are masked unless an
 // administrator with agents:sensitive:read asks for them (sensitive=full).

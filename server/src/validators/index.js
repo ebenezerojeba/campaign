@@ -69,6 +69,17 @@ export const passwordChangeSchema = z.object({
   newPassword: z.string().min(12, 'Use at least 12 characters').max(200),
 });
 
+export const identityCheckSchema = z.object({
+  cardReadable: z.boolean(),
+  vinCandidates: z.array(z.string().trim().max(30)).max(6).default([]),
+  nameFound: z.boolean().nullable().default(null),
+  dateOfBirthFound: z.boolean().nullable().default(null),
+  face: z.object({
+    distance: z.number().min(0).max(4).nullable().default(null),
+    skipped: z.boolean().default(false),
+  }),
+});
+
 export const staffUpdateSchema = z.object({
   role: z.enum(['admin', 'reviewer']).optional(),
   active: z.boolean().optional(),

@@ -383,6 +383,10 @@ describe('administration', () => {
   test('admin reviews a registration and the change is persisted', async () => {
     const admin = await signIn('admin@test.org');
     const a = await Agent.findOne({ email: 'ngozi@example.com' });
+    const blocked = await admin.patch(`/api/admin/agents/${a._id}/status`).set(fetchHeader).send({ status: 'approved', reason: 'Documents verified', notify: true });
+    assert.equal(blocked.status, 409, 'a card and face check is needed first');
+    assert.equal(blocked.body.error.code, 'CHECK_REQUIRED');
+    await admin.post(`/api/admin/agents/${a._id}/checks`).set(fetchHeader).send({ cardReadable: false, face: { distance: 0.3 } });
     const res = await admin.patch(`/api/admin/agents/${a._id}/status`).set(fetchHeader).send({ status: 'approved', reason: 'Documents verified', notify: true });
     assert.equal(res.status, 200);
     const saved = await Agent.findById(a._id).lean();

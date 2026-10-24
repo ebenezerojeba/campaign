@@ -13,6 +13,7 @@ import { resolveElectoral, wardsFor, pollingUnitsFor, senatorialDistricts } from
 import { checkDocument, storeDocument, deleteDocuments } from '../services/documents.js';
 import { claimPosition, releasePosition, takenPositions } from '../services/positions.js';
 import { captchaEnabled, verifyCaptcha } from '../services/captcha.js';
+import { recordApplicantCheck } from '../services/identityChecks.js';
 import mongoose from 'mongoose';
 
 export async function health(_req, res) {
@@ -175,7 +176,7 @@ export async function register(req, res) {
         agent = await Agent.create({ ...doc, _id: agentId, reference, documents: stored });
       } catch (err) {
         // Never leave orphaned documents behind.
-        await deleteDocuments(Object.values(stored).map((d) => d.fileId));
+        await deleteDocuments(Object.values(stored));
         if (err?.code !== 11000) throw err;
         const key = Object.keys(err.keyPattern ?? {})[0];
         if (key !== 'reference') throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
@@ -188,6 +189,9 @@ export async function register(req, res) {
     if (position.created) await releasePosition(agentId, doc.pollingUnitCode, doc.agentCategory).catch(() => {});
     throw err;
   }
+
+  // Information only; a failure here never affects the saved registration.
+  await recordApplicantCheck(agent._id, data.cardCheck).catch((err) => console.error('[checks] applicant check not recorded', err?.name));
 
   // The registration is saved. Emails go to the outbox and are sent after the
   // response, within the provider's limits; a queuing problem is logged and

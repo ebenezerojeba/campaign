@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ArrowLeft, CircleCheck, CircleX, CircleSlash, RotateCcw, Mail, Phone, MessageSquareText, Send, Download, ExternalLink, FileText, Trash2, Eye, ShieldAlert } from 'lucide-react';
 import { useAdmin, can } from '../context.jsx';
@@ -11,6 +11,7 @@ import { useToast } from '../../components/ui/Toast.jsx';
 import { formatDate, formatDateTime, formatPhone, relativeTime } from '../../lib/format.js';
 import { AGENT_CATEGORIES, DOCUMENT_KINDS, labelFor } from '../../../../shared/options.js';
 import { formatBytes } from '../../../../shared/agentForm.js';
+import { nameFound, dateFound } from '../../../../shared/cardCheck.js';
 import { stateLabel } from '../../../../shared/nigeria.js';
 
 const ACTIONS = {
@@ -66,10 +67,12 @@ function StatusDialog({ target, agent, onClose, onDone }) {
       if (result.notification?.status === 'failed') notify('The decision email could not be sent. The status change was saved.', 'error');
       onDone(result);
     } catch (err) {
-      setError(err.message);
+      setError(err.fields?.reason ?? err.message);
       setBusy(false);
     }
   };
+  const flagged = target === 'approved' && (agent.checks?.reviewer?.flagged || agent.checks?.applicant?.flagged);
+  const unchecked = target === 'approved' && !agent.isSample && !agent.checks?.reviewer;
 
   return (
     <Dialog open onClose={onClose} title={`${action.verb} ${agent.firstName}’s registration?`} footer={
@@ -80,7 +83,9 @@ function StatusDialog({ target, agent, onClose, onDone }) {
     }>
       <p className="text-[15px] text-slate-600">{action.body}</p>
       <div className="mt-4 grid gap-4">
-        <TextArea label="Reason" optional rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} hint="Recorded in the status history. Not shown to the applicant." />
+        {unchecked && <Alert tone="warning">Run the voter’s card and face check on this page before approving.</Alert>}
+        {flagged && <Alert tone="warning">The card or face check raised a flag. Say why you are approving anyway.</Alert>}
+        <TextArea label="Reason" optional={!flagged} rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} hint="Recorded in the status history. Not shown to the applicant." />
         {canEmail && <Checkbox checked={send} onChange={setSend}>Email the decision to {agent.email}</Checkbox>}
         {agent.isSample && canEmail && <p className="text-sm text-slate-500">Sample records never receive messages.</p>}
         {error && <Alert tone="error">{error}</Alert>}
@@ -126,6 +131,121 @@ function DeleteDialog({ agent, onClose }) {
         {error && <Alert tone="error">{error}</Alert>}
       </div>
     </Dialog>
+  );
+}
+
+// ---------- Voter's card and face check ----------
+// Runs in the reviewer's browser: reads the card (Tesseract) and compares the
+// two faces (face-api). The server compares the VIN with the stored value and
+// keeps only the outcome. Results are aids, never proof: look at the photos.
+const VIN_TEXT = {
+  match: ['approved', 'VIN matches the card'],
+  close: ['pending', 'VIN differs by 1 or 2 characters: a typo or a misread'],
+  mismatch: ['rejected', 'VIN does not match the card'],
+  unreadable: ['neutral', 'The VIN could not be read: check the card by eye'],
+  skipped: ['neutral', 'Not checked'],
+};
+const FACE_TEXT = {
+  match: ['approved', 'The faces look like the same person'],
+  uncertain: ['pending', 'Unsure: compare the faces by eye'],
+  different: ['rejected', 'The faces look like different people'],
+  no_face: ['neutral', 'A face could not be found in one of the photos'],
+  skipped: ['neutral', 'Not checked (PDF card)'],
+};
+const FOUND_TEXT = { found: ['approved', 'Found on the card'], not_found: ['pending', 'Not found on the card'], unknown: ['neutral', 'Not checked'] };
+
+function CheckRow({ label, entry }) {
+  if (!entry) return null;
+  const [tone, text] = entry;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+      <dt className="text-sm text-slate-500">{label}</dt>
+      <dd><Badge tone={tone} dot>{text}</Badge></dd>
+    </div>
+  );
+}
+
+async function fetchDocument(agentId, kind) {
+  const res = await fetch(`/api/admin/agents/${agentId}/documents/${kind}`, { credentials: 'same-origin' });
+  if (!res.ok) throw new Error(`The ${kind === 'pvc' ? 'voter’s card' : 'passport photo'} could not be loaded`);
+  return res.blob();
+}
+
+function IdentityChecks({ agent, onChecked }) {
+  const { api, user, demo } = useAdmin();
+  const [state, setState] = useState({ busy: false, step: '', error: null });
+  const checks = agent.checks ?? {};
+  const reviewer = checks.reviewer;
+  const applicant = checks.applicant;
+  const allowed = can(user, 'agents:review') && can(user, 'documents:read') && !demo && !agent.isSample;
+  const pvc = agent.documents?.pvc;
+  const passport = agent.documents?.passport;
+
+  const run = async () => {
+    setState({ busy: true, step: 'Reading the voter’s card…', error: null });
+    try {
+      const body = { cardReadable: false, vinCandidates: [], nameFound: null, dateOfBirthFound: null, face: { skipped: true } };
+      if (pvc && pvc.contentType !== 'application/pdf') {
+        const cardBlob = await fetchDocument(agent._id, 'pvc');
+        const { readCard } = await import('../../lib/cardReader.js');
+        const { text, candidates } = await readCard(cardBlob);
+        body.cardReadable = candidates.length > 0;
+        body.vinCandidates = candidates;
+        if (text.trim()) {
+          const first = nameFound(text, agent.firstName);
+          const last = nameFound(text, agent.lastName);
+          body.nameFound = first === null && last === null ? null : Boolean(first && last);
+          body.dateOfBirthFound = agent.dateOfBirth ? dateFound(text, agent.dateOfBirth) : null;
+        }
+        if (passport) {
+          setState((s) => ({ ...s, step: 'Comparing the faces…' }));
+          const { compareFaces } = await import('../../lib/faceCompare.js');
+          const { distance } = await compareFaces(await fetchDocument(agent._id, 'passport'), cardBlob);
+          body.face = { distance, skipped: false };
+        }
+      }
+      setState((s) => ({ ...s, step: 'Saving the result…' }));
+      const result = await api.post(`/agents/${agent._id}/checks`, body);
+      onChecked(result);
+      setState({ busy: false, step: '', error: null });
+    } catch (err) {
+      setState({ busy: false, step: '', error: err.message || 'The check could not be completed on this device.' });
+    }
+  };
+
+  // Run automatically the first time a reviewer opens the registration.
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (allowed && !reviewer && !autoRan.current) { autoRan.current = true; run(); }
+  }, [allowed, reviewer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <Card
+      title="Voter’s card and face check"
+      description="Reads the VIN, name and date of birth on the card and compares the two photos. Text and face reading are not perfect: always look at the photos yourself."
+      actions={allowed && <Button size="sm" variant="secondary" icon={RotateCcw} loading={state.busy} loadingText="Checking" onClick={run}>{reviewer ? 'Run again' : 'Run check'}</Button>}
+    >
+      {state.busy && <p className="mb-3 text-sm text-slate-600">{state.step} This can take up to a minute the first time.</p>}
+      {state.error && <Alert tone="error" className="mb-3">{state.error}</Alert>}
+      {reviewer ? (
+        <>
+          {reviewer.flagged && <Alert tone="warning" className="mb-3" title="This check raised a flag">Look closely at the card and photos. Approving needs a reason.</Alert>}
+          <dl className="divide-y divide-line">
+            <CheckRow label="VIN" entry={VIN_TEXT[reviewer.vin?.result]} />
+            <CheckRow label="Face" entry={FACE_TEXT[reviewer.face?.result]} />
+            <CheckRow label="Name" entry={FOUND_TEXT[reviewer.name]} />
+            <CheckRow label="Date of birth" entry={FOUND_TEXT[reviewer.dateOfBirth]} />
+          </dl>
+          <p className="mt-2 text-xs text-slate-500">Checked by {reviewer.byName ?? 'a reviewer'}, {formatDateTime(reviewer.createdAt)}{typeof reviewer.face?.distance === 'number' ? ` · face distance ${reviewer.face.distance}` : ''}</p>
+        </>
+      ) : !state.busy && <p className="text-sm text-slate-500">{allowed ? 'Not checked yet.' : 'Not checked yet. A reviewer runs this check before approval.'}</p>}
+      {applicant && (
+        <p className="mt-3 border-t border-line pt-3 text-sm text-slate-600">
+          At registration, the applicant’s phone read the VIN as: <strong>{VIN_TEXT[applicant.vin?.result]?.[1] ?? 'not checked'}</strong>
+          {applicant.vin?.applicantConfirmed && '. They were warned it may not match and chose to keep it'}.
+        </p>
+      )}
+    </Card>
   );
 }
 
@@ -323,6 +443,7 @@ export default function AgentDetail() {
               </Row>
             </dl>
           </Card>
+          <IdentityChecks agent={a} onChecked={(checks) => setData((d) => ({ ...d, checks }))} />
           <Documents agent={a} />
           <Notes agent={a} onAdded={(notes) => setData((d) => ({ ...d, notes }))} />
         </div>

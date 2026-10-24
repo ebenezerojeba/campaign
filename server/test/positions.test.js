@@ -77,7 +77,11 @@ async function signIn(email, password = 'correct-horse-battery') {
   assert.equal(res.status, 200, JSON.stringify(res.body));
   return agent;
 }
-const setStatus = (admin, id, status) => admin.patch(`/api/admin/agents/${id}/status`).set(fetchHeader).send({ status, notify: false });
+const setStatus = async (admin, id, status) => {
+  // Approval needs a card and face check first.
+  if (status === 'approved') await admin.post(`/api/admin/agents/${id}/checks`).set(fetchHeader).send({ cardReadable: false, face: { distance: 0.3 } });
+  return admin.patch(`/api/admin/agents/${id}/status`).set(fetchHeader).send({ status, notify: false });
+};
 
 before(async () => {
   mongo = await MongoMemoryServer.create({ binary: { version: process.env.MONGOMS_VERSION || '7.0.14' } });

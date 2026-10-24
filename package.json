@@ -10,8 +10,8 @@
   "scripts": {
     "dev": "concurrently -n api,web -c green,yellow \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "node --watch-path=server --watch-path=shared server/src/server.js",
-    "dev:web": "vite",
-    "build": "vite build",
+    "dev:web": "node scripts/copy-vendor.mjs && vite",
+    "build": "node scripts/copy-vendor.mjs && vite build",
     "preview": "vite preview",
     "start": "NODE_ENV=production node server/src/server.js",
     "test": "node --test --test-concurrency=1 server/test/",
@@ -19,7 +19,8 @@
     "seed:reset": "node server/scripts/seed.js --reset",
     "create-admin": "node server/scripts/create-admin.js",
     "email:check": "node server/scripts/check-email.js",
-    "email:recover": "node server/scripts/email-recover.js"
+    "email:recover": "node server/scripts/email-recover.js",
+    "docs:move": "node server/scripts/documents-to-cloudinary.js"
   },
   "devDependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
@@ -34,8 +35,11 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.2",
+    "@tesseract.js-data/eng": "1.0.0",
     "@vercel/functions": "^3.10.3",
+    "@vladmandic/face-api": "1.7.15",
     "bcryptjs": "^3.0.3",
+    "cloudinary": "2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^18.0.9",
@@ -53,6 +57,7 @@
     "react-hook-form": "^7.90.0",
     "react-router": "^7.18.4",
     "recharts": "^3.10.1",
+    "tesseract.js": "7.0.0",
     "zod": "^3.25.76"
   }
 }

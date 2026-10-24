@@ -22,6 +22,7 @@ import { get, post } from '../lib/api.js';
 import { prepareFile, describeRules, acceptFor } from '../lib/documentFiles.js';
 import { useConfig } from '../lib/config.jsx';
 import { cx } from '../lib/format.js';
+import { compareVin, normaliseVin } from '../../../shared/cardCheck.js';
 
 const STEPS = [
   { title: 'Your details', short: 'Details' },
@@ -453,7 +454,31 @@ function StepRole({ register, errors, control, watch, setValue }) {
   );
 }
 
-function StepDocuments({ files, setFile, fileErrors, setFileError }) {
+// What the browser read from the voter's card, compared with the typed VIN.
+// The team checks every card again; this only catches typos early.
+function CardCheckNotice({ scan, vinCheck, confirmed, onConfirm, onEditVin }) {
+  if (!scan || scan.status === 'idle' || scan.status === 'skipped') return null;
+  if (scan.status === 'reading') {
+    return <p className="flex items-center gap-2 text-sm text-slate-600"><RotateCw className="size-4 animate-spin" aria-hidden />Checking the VIN on your voter’s card…</p>;
+  }
+  if (vinCheck.result === 'match') return <Alert tone="success" title="The VIN on your card matches the one you entered" />;
+  if (vinCheck.result === 'unreadable') {
+    return <Alert tone="info" title="We could not read the VIN on your card photo">That is fine: the registration team will check it. A sharp, well-lit photo of the whole card helps.</Alert>;
+  }
+  if (confirmed) return <Alert tone="info" title="You confirmed your VIN">The registration team will check it against your card.</Alert>;
+  return (
+    <Alert tone="warning" title="Your VIN may not match your voter’s card" action={
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={onEditVin}>Change my VIN</Button>
+        <Button size="sm" variant="secondary" onClick={onConfirm}>My VIN is correct</Button>
+      </div>
+    }>
+      Your card seems to show <span className="font-mono font-semibold">{vinCheck.read}</span>. Reading photos is not perfect, so compare it with the card itself.
+    </Alert>
+  );
+}
+
+function StepDocuments({ files, setFile, fileErrors, setFileError, cardNotice }) {
   return (
     <div className="grid gap-8">
       <Alert tone="info" title="How your files are checked">
@@ -475,6 +500,7 @@ function StepDocuments({ files, setFile, fileErrors, setFileError }) {
           onError={(msg) => setFileError(kind, msg)}
         />
       ))}
+      {cardNotice}
     </div>
   );
 }
@@ -503,9 +529,10 @@ function ReviewSection({ title, step, onEdit, rows, children }) {
   );
 }
 
-function StepReview({ values, files, errors, control, onEdit }) {
+function StepReview({ values, files, errors, control, onEdit, cardNotice }) {
   return (
     <div className="grid gap-5">
+      {cardNotice}
       <ReviewSection title="Your details" step={0} onEdit={onEdit} rows={[
         ['Name', [values.firstName, values.middleName, values.lastName].filter(Boolean).join(' ')],
         ['Date of birth', /^\d{4}-\d{2}-\d{2}$/.test(values.dateOfBirth) ? `${values.dateOfBirth.slice(8, 10)}/${values.dateOfBirth.slice(5, 7)}/${values.dateOfBirth.slice(0, 4)}` : ''],
@@ -605,6 +632,26 @@ export default function Register() {
   };
   const setFileError = (kind, message) => setFileErrors((e) => ({ ...e, [kind]: message }));
 
+  // Read the VIN on the voter's card in the browser as soon as it is chosen.
+  const [cardScan, setCardScan] = useState({ status: 'idle', candidates: [] });
+  const [vinConfirmed, setVinConfirmed] = useState(false);
+  const pvc = files.pvc;
+  useEffect(() => {
+    if (!pvc) { setCardScan({ status: 'idle', candidates: [] }); return undefined; }
+    if (pvc.type === 'application/pdf') { setCardScan({ status: 'skipped', candidates: [] }); return undefined; }
+    let cancelled = false;
+    setCardScan({ status: 'reading', candidates: [] });
+    import('../lib/cardReader.js')
+      .then(({ readCard }) => readCard(pvc.blob))
+      .then(({ candidates }) => { if (!cancelled) setCardScan({ status: 'done', candidates }); })
+      .catch(() => { if (!cancelled) setCardScan({ status: 'failed', candidates: [] }); });
+    return () => { cancelled = true; };
+  }, [pvc]);
+  const typedVin = watch('vin');
+  useEffect(() => { setVinConfirmed(false); }, [typedVin, cardScan.candidates]);
+  const vinCheck = ['done', 'failed'].includes(cardScan.status) ? compareVin(normaliseVin(typedVin), cardScan.candidates) : { result: 'skipped' };
+  const vinNeedsAnswer = ['close', 'mismatch'].includes(vinCheck.result) && !vinConfirmed;
+
   // Free preview images when leaving the page.
   const filesRef = useRef(files);
   filesRef.current = files;
@@ -638,8 +685,12 @@ export default function Register() {
   const submitRegistration = async (values) => {
     setSubmitError(null);
     if (missingDocuments()) { goTo(DOCUMENTS_STEP); return; }
+    if (vinNeedsAnswer) {
+      setSubmitError({ tone: 'warning', title: 'Check your VIN', message: 'The VIN you entered may not match your voter’s card. Change it, or confirm that it is correct.' });
+      return;
+    }
     const body = new FormData();
-    body.append('data', JSON.stringify(values));
+    body.append('data', JSON.stringify({ ...values, cardCheck: { vin: vinCheck.result, applicantConfirmed: vinConfirmed } }));
     for (const kind of requiredDocuments()) body.append(kind, files[kind].blob, files[kind].filename);
     if (captchaOn && !captcha) {
       setSubmitError({ tone: 'warning', title: 'Complete the security check', message: 'Tick the security check above the button, then submit again.' });
@@ -695,6 +746,7 @@ export default function Register() {
   }
 
   const stepProps = { register, errors, control, watch, setValue };
+  const cardNotice = <CardCheckNotice scan={cardScan} vinCheck={vinCheck} confirmed={vinConfirmed} onConfirm={() => { setVinConfirmed(true); setSubmitError(null); }} onEditVin={() => goTo(IDENTITY_STEP)} />;
 
   return (
     <div className="bg-mist pb-32 pt-8 sm:pt-12 lg:pb-20">
@@ -717,8 +769,8 @@ export default function Register() {
                 {step === 0 && <StepPersonal {...stepProps} />}
                 {step === 1 && <StepRole {...stepProps} />}
                 {step === IDENTITY_STEP && <StepIdentity {...stepProps} />}
-                {step === DOCUMENTS_STEP && <StepDocuments files={files} setFile={setFile} fileErrors={fileErrors} setFileError={setFileError} />}
-                {step === 4 && <StepReview values={getValues()} files={files} errors={errors} control={control} onEdit={goTo} />}
+                {step === DOCUMENTS_STEP && <StepDocuments files={files} setFile={setFile} fileErrors={fileErrors} setFileError={setFileError} cardNotice={cardNotice} />}
+                {step === 4 && <StepReview values={getValues()} files={files} errors={errors} control={control} onEdit={goTo} cardNotice={cardNotice} />}
               </m.div>
             </AnimatePresence>
 

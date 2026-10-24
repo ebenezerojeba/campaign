@@ -13,6 +13,7 @@ import mongoose from 'mongoose';
 import multer from 'multer';
 import { DOCUMENT_RULES, formatBytes } from '../../../shared/agentForm.js';
 import { ApiError } from '../utils/ApiError.js';
+import * as cloud from './cloudinary.js';
 
 const BUCKET = 'agentDocuments';
 const MAX_FILE = Math.max(...Object.values(DOCUMENT_RULES).map((r) => r.maxBytes));
@@ -200,20 +201,35 @@ export function checkDocument(kind, file) {
   };
 }
 
-// ---------- Storage (MongoDB GridFS) ----------
+// ---------- Storage ----------
+// New documents go to Cloudinary when CLOUDINARY_URL is set, as private
+// ("authenticated") assets that can only be fetched with a signed URL. The
+// server fetches them itself and streams them to authorised staff, so no
+// Cloudinary URL ever reaches a browser. Without CLOUDINARY_URL, and for files
+// not yet moved, documents live in the MongoDB GridFS bucket.
 
 const bucket = () => new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: BUCKET });
+const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
 
-export async function storeDocument(kind, checked, reference) {
-  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' }[checked.contentType];
-  const upload = bucket().openUploadStream(`${reference}-${kind}.${ext}`, {
+export const hasDocument = (d) => Boolean(d?.fileId || d?.cloudinary?.publicId);
+export const cloudinaryEnabled = () => cloud.enabled();
+
+async function storeInGridFs(kind, checked, reference) {
+  const upload = bucket().openUploadStream(`${reference}-${kind}.${EXT[checked.contentType]}`, {
     metadata: { kind, reference, contentType: checked.contentType, sha256: checked.sha256 },
   });
   await new Promise((resolve, reject) => {
     Readable.from(checked.buffer).pipe(upload).on('finish', resolve).on('error', reject);
   });
+  return { fileId: upload.id };
+}
+
+export async function storeDocument(kind, checked, reference) {
+  const where = cloud.enabled()
+    ? { cloudinary: await cloud.upload(checked.buffer, { kind, contentType: checked.contentType, ext: EXT[checked.contentType] }) }
+    : await storeInGridFs(kind, checked, reference);
   return {
-    fileId: upload.id,
+    ...where,
     contentType: checked.contentType,
     bytes: checked.bytes,
     width: checked.width,
@@ -223,12 +239,34 @@ export async function storeDocument(kind, checked, reference) {
   };
 }
 
-export function openDocument(fileId) {
-  return bucket().openDownloadStream(fileId);
+// A readable stream of the document's bytes, wherever it is stored.
+export async function openDocument(doc) {
+  if (doc?.cloudinary?.publicId) return cloud.download(doc.cloudinary);
+  return bucket().openDownloadStream(new mongoose.Types.ObjectId(String(doc.fileId)));
 }
 
-export async function deleteDocuments(fileIds) {
-  await Promise.all(fileIds.filter(Boolean).map((id) => bucket().delete(id).catch((err) => {
-    if (!/FileNotFound/i.test(err?.message ?? '')) console.error('[documents] delete failed', String(id), err.message);
-  })));
+// The whole document in memory (for checks and moving files).
+export async function readDocument(doc) {
+  const stream = await openDocument(doc);
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
+export async function deleteGridFsFile(fileId) {
+  await bucket().delete(new mongoose.Types.ObjectId(String(fileId))).catch((err) => {
+    if (!/FileNotFound/i.test(err?.message ?? '')) console.error('[documents] delete failed', String(fileId), err.message);
+  });
+}
+
+// Deletes documents from wherever they are stored. Accepts document records
+// (or bare GridFS ids, from older callers).
+export async function deleteDocuments(docs) {
+  await Promise.all(docs.filter(Boolean).map(async (d) => {
+    if (d instanceof mongoose.Types.ObjectId || typeof d === 'string') return deleteGridFsFile(d);
+    const jobs = [];
+    if (d.cloudinary?.publicId) jobs.push(cloud.destroy(d.cloudinary).catch((err) => console.error('[documents] cloud delete failed', err?.message)));
+    if (d.fileId) jobs.push(deleteGridFsFile(d.fileId));
+    return Promise.all(jobs);
+  }));
 }

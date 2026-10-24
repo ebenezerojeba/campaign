@@ -43,11 +43,23 @@ const notificationSchema = new Schema(
   { _id: false },
 );
 
-// An uploaded file kept in the GridFS bucket "agentDocuments". Only staff
-// with documents:read can fetch the bytes (see admin.controller.js).
+// An uploaded file, kept either in Cloudinary as a private asset or in the
+// GridFS bucket "agentDocuments". Only staff with documents:read can fetch the
+// bytes (see admin.controller.js).
+const cloudinaryAssetSchema = new Schema(
+  {
+    publicId: { type: String, required: true },
+    resourceType: { type: String, enum: ['image', 'raw'], required: true },
+    version: Number,
+    format: String,
+    md5: String,
+  },
+  { _id: false },
+);
 const documentSchema = new Schema(
   {
-    fileId: { type: Schema.Types.ObjectId, required: true },
+    fileId: { type: Schema.Types.ObjectId },
+    cloudinary: { type: cloudinaryAssetSchema, default: undefined },
     contentType: { type: String, required: true },
     bytes: Number,
     width: Number,

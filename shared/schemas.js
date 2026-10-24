@@ -143,7 +143,14 @@ export const registrationSchema = personalSchema
   .merge(roleSchema)
   .merge(identitySchema)
   .merge(consentSchema)
-  .extend({ website: z.string().max(0).optional() }) // honeypot: real people leave this empty
+  .extend({
+    website: z.string().max(0).optional(), // honeypot: real people leave this empty
+    // Result of the voter's card check run in the applicant's browser (information only).
+    cardCheck: z.object({
+      vin: z.enum(['match', 'close', 'mismatch', 'unreadable', 'skipped']),
+      applicantConfirmed: z.boolean().optional(),
+    }).optional(),
+  })
   .superRefine((data, ctx) => {
     refinePersonal(data, ctx);
     refineRole(data, ctx);
