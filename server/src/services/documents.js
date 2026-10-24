@@ -224,10 +224,28 @@ async function storeInGridFs(kind, checked, reference) {
   return { fileId: upload.id };
 }
 
+// If Cloudinary refuses or fails (monthly limit reached, outage, timeout), the
+// file is kept in the database instead so the registration still succeeds.
+// After a failure Cloudinary is skipped for a few minutes on this instance, so
+// applicants do not each wait for a timeout.
+const CLOUD_PAUSE_MS = 5 * 60 * 1000;
+let cloudPausedUntil = 0;
+export const resetCloudPauseForTests = () => { cloudPausedUntil = 0; };
+
+async function storeInCloudOrDatabase(kind, checked, reference) {
+  if (cloud.enabled() && Date.now() >= cloudPausedUntil) {
+    try {
+      return { cloudinary: await cloud.upload(checked.buffer, { kind, contentType: checked.contentType, ext: EXT[checked.contentType] }) };
+    } catch (err) {
+      cloudPausedUntil = Date.now() + CLOUD_PAUSE_MS;
+      console.error('[documents] Cloudinary upload failed; saved in the database instead', err?.http_code ?? err?.name, String(err?.message ?? '').slice(0, 120));
+    }
+  }
+  return storeInGridFs(kind, checked, reference);
+}
+
 export async function storeDocument(kind, checked, reference) {
-  const where = cloud.enabled()
-    ? { cloudinary: await cloud.upload(checked.buffer, { kind, contentType: checked.contentType, ext: EXT[checked.contentType] }) }
-    : await storeInGridFs(kind, checked, reference);
+  const where = await storeInCloudOrDatabase(kind, checked, reference);
   return {
     ...where,
     contentType: checked.contentType,

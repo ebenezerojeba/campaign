@@ -102,6 +102,7 @@ after(async () => {
 
 beforeEach(() => {
   cloud.setSdkForTests(fake);
+  docs.resetCloudPauseForTests();
   uploads = [];
   failUpload = false;
 });
@@ -149,12 +150,24 @@ test('staff open Cloudinary documents through the server; the response never con
   assert.ok(!JSON.stringify(detail.body).includes('cloudinary'), 'no storage details in the API');
 });
 
-test('a failed Cloudinary upload saves nothing and reports a server error', async () => {
-  const before = await Agent.countDocuments();
+test('if Cloudinary fails (for example its monthly limit), files go to the database and registration still succeeds', async () => {
   failUpload = true;
   const res = await register();
-  assert.equal(res.status, 500);
-  assert.equal(await Agent.countDocuments(), before);
+  assert.equal(res.status, 201);
+  const a = await Agent.findOne({ reference: res.body.data.reference }).lean();
+  for (const kind of ['passport', 'pvc']) {
+    assert.ok(a.documents[kind].fileId, `${kind} saved in the database`);
+    assert.equal(a.documents[kind].cloudinary, undefined);
+  }
+  // Cloudinary is skipped for a few minutes after a failure: no repeated waits.
+  failUpload = false;
+  uploads = [];
+  const next = await register();
+  assert.equal(next.status, 201);
+  assert.equal(uploads.length, 0, 'not retried during the pause');
+  // Staff can still open the database copy.
+  const bytes = await docs.readDocument(a.documents.pvc);
+  assert.ok(bytes.length > 0);
 });
 
 test('deleting a registration deletes its Cloudinary files', async () => {
