@@ -8,8 +8,9 @@
 //   options: --limit 500  --concurrency 4  --public-dns
 //
 // Safe to stop and run again: finished files are skipped. Every copy is
-// checked against the SHA-256 recorded at registration before anything else
-// happens to it. Registrations themselves are never changed apart from where
+// checked byte for byte against the file stored in the database (the checksum
+// recorded at registration is of the file as uploaded, before photo metadata
+// was removed, so it is not used here). Registrations themselves are never changed apart from where
 // their documents are stored. Needs MONGODB_URI and CLOUDINARY_URL.
 import crypto from 'node:crypto';
 import dns from 'node:dns';
@@ -61,9 +62,9 @@ if (!confirm) {
 const tally = { done: 0, failed: 0, mismatched: 0 };
 async function copy({ id, kind, d }) {
   const bytes = await docs.readDocument({ fileId: d.fileId });
-  if (sha256(bytes) !== d.sha256) { tally.mismatched += 1; console.error(`[skip] ${id} ${kind}: stored file does not match its recorded checksum`); return; }
+  if (!bytes.length) { tally.mismatched += 1; console.error(`[skip] ${id} ${kind}: stored file is empty`); return; }
   const asset = await cloud.upload(bytes, { kind, contentType: d.contentType, ext: EXT[d.contentType] });
-  if (asset.md5 && asset.md5 !== md5(bytes)) {
+  if (!asset.md5 || asset.md5 !== md5(bytes)) {
     await cloud.destroy(asset).catch(() => {});
     throw new Error('Cloudinary copy differs from the original');
   }
@@ -74,9 +75,9 @@ async function copy({ id, kind, d }) {
 }
 
 async function removeGridFs({ id, kind, d }) {
-  // Re-download from Cloudinary and compare before deleting the database copy.
-  const bytes = await docs.readDocument({ cloudinary: d.cloudinary });
-  if (sha256(bytes) !== d.sha256) { tally.mismatched += 1; console.error(`[keep] ${id} ${kind}: Cloudinary copy does not match; GridFS copy kept`); return; }
+  // Download both copies and compare them byte for byte before deleting the database copy.
+  const [cloudBytes, dbBytes] = await Promise.all([docs.readDocument({ cloudinary: d.cloudinary }), docs.readDocument({ fileId: d.fileId })]);
+  if (!cloudBytes.length || sha256(cloudBytes) !== sha256(dbBytes)) { tally.mismatched += 1; console.error(`[keep] ${id} ${kind}: Cloudinary copy does not match; GridFS copy kept`); return; }
   const res = await Agent.updateOne({ _id: id, [`documents.${kind}.fileId`]: d.fileId, [`documents.${kind}.cloudinary.publicId`]: d.cloudinary.publicId }, { $unset: { [`documents.${kind}.fileId`]: 1 } });
   if (res.modifiedCount === 1) { await docs.deleteGridFsFile(d.fileId); tally.done += 1; }
 }
