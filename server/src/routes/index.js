@@ -37,6 +37,8 @@ adminRouter.post('/auth/logout', admin.logout);
 adminRouter.use(requireStaff);
 const can = requirePermission;
 adminRouter.get('/auth/me', admin.me);
+adminRouter.post('/auth/password', limits.login, validate(v.passwordChangeSchema), admin.changePassword);
+adminRouter.get('/positions/conflicts', can('agents:read'), admin.listPositionConflicts);
 adminRouter.get('/dashboard', can('agents:read'), admin.dashboard);
 
 adminRouter.get('/agents', can('agents:read'), validate(v.agentQuerySchema, 'query'), admin.listAgents);

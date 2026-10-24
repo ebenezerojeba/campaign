@@ -11,6 +11,9 @@ import { requiredDocuments } from '../../../shared/agentForm.js';
 import { queueRegistrationEmails, kickOutbox } from '../services/outbox.js';
 import { resolveElectoral, wardsFor, pollingUnitsFor, senatorialDistricts } from '../services/electoral.js';
 import { checkDocument, storeDocument, deleteDocuments } from '../services/documents.js';
+import { claimPosition, releasePosition, takenPositions } from '../services/positions.js';
+import { captchaEnabled, verifyCaptcha } from '../services/captcha.js';
+import mongoose from 'mongoose';
 
 export async function health(_req, res) {
   let db = dbState();
@@ -23,7 +26,7 @@ export async function health(_req, res) {
 
 // Public, non-secret configuration used by the frontend.
 export async function publicConfig(_req, res) {
-  if (dbConfigured()) kickOutbox({ max: 1, minIntervalMs: 20000 });
+  if (dbConfigured()) kickOutbox();
   send(res, {
     registrationOpen: dbConfigured(),
     emailEnabled: emailConfigured(),
@@ -31,6 +34,7 @@ export async function publicConfig(_req, res) {
     contact: env.contact,
     privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
     senatorialDistricts: senatorialDistricts(),
+    captchaSiteKey: captchaEnabled() ? env.captcha.siteKey : '',
   });
 }
 
@@ -48,26 +52,35 @@ export async function listPollingUnits(req, res) {
   const { state, lga, ward } = req.validatedQuery;
   const items = pollingUnitsFor(state, lga, ward);
   if (!items) throw ApiError.notFound('No polling units are configured for this ward');
-  res.setHeader('Cache-Control', LOCATION_CACHE);
-  send(res, items);
+  // Which agent positions are already filled: codes only, never who holds them.
+  let taken = {};
+  if (dbConfigured()) {
+    try { await connectDb(); taken = await takenPositions(lga, ward); } catch (err) { console.error('[positions] availability unavailable', err?.name); }
+  }
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  send(res, items.map((u) => ({ ...u, taken: taken[u.code] ?? [] })));
 }
 
 // The multipart form sends its text fields as JSON in "data", so booleans
 // and empty strings survive. Validation runs on the parsed object next.
 export function parseRegistrationData(req, _res, next) {
   try {
-    req.body = JSON.parse(req.body?.data ?? '{}');
+    const data = JSON.parse(req.body?.data ?? '{}');
+    req.captchaToken = req.body?.captcha;
+    req.body = data;
     return next();
   } catch {
     return next(ApiError.badRequest('The registration could not be read. Refresh the page and try again.'));
   }
 }
 
-const DUPLICATE_MESSAGE = 'A registration with this phone number or email address already exists. Check your registration status instead, or contact the team if you need to change your details.';
+// One message for every kind of duplicate (phone, email, NIN, VIN), so the
+// response never reveals which identifier belongs to an existing registration.
+const DUPLICATE_MESSAGE = 'Some of these details are already used by an existing registration. If you have registered before, check your registration status. Otherwise, contact the registration team.';
+const CAPTCHA_MESSAGE = 'Complete the security check and try again.';
+const positionTakenMessage = (category) => `The ${category === 'agent_2' ? 'Agent 2' : 'Agent 1'} position at this polling unit has already been filled. Check your agent type and polling unit, or contact the coordination team if you were asked to serve here.`;
 
 const fieldErrors = (fields) => new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields });
-
-const DUPLICATE_IDENTITY_MESSAGE = 'A registration with these identification details already exists. Check your registration status, or contact the team if you think this is a mistake.';
 
 export async function register(req, res) {
   const data = req.body;
@@ -89,6 +102,7 @@ export async function register(req, res) {
     }
   }
   if (Object.keys(errors).length) throw fieldErrors(errors);
+  if (!(await verifyCaptcha(req.captchaToken, req.ip)).ok) throw new ApiError(400, 'CAPTCHA_FAILED', CAPTCHA_MESSAGE);
 
   const existing = await Agent.exists({ $or: [{ phone }, { email }] });
   if (existing) throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
@@ -101,7 +115,7 @@ export async function register(req, res) {
   const ninHash = keyedHash('nin', data.nin);
   const vinHash = keyedHash('vin', data.vin);
   if (await Agent.exists({ $or: [{ 'nin.hash': ninHash }, { 'identityDetails.vinHash': vinHash }] })) {
-    throw ApiError.conflict(DUPLICATE_IDENTITY_MESSAGE, 'DUPLICATE_REGISTRATION');
+    throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
   }
   const nin = { encrypted: encryptField(data.nin), last4: data.nin.slice(-4), hash: ninHash };
   const bankDetails = {
@@ -145,23 +159,35 @@ export async function register(req, res) {
     statusHistory: [{ from: null, to: 'pending', reason: 'Registration submitted', at: new Date() }],
   };
 
+  // Claim the Agent 1 / Agent 2 position before saving anything. The claim is
+  // atomic, so two people submitting for one position at once cannot both win.
+  const agentId = new mongoose.Types.ObjectId();
+  const position = await claimPosition(agentId, doc.pollingUnitCode, doc.agentCategory);
+  if (!position.ok) throw fieldErrors({ agentCategory: positionTakenMessage(doc.agentCategory) });
+
   let agent;
-  for (let attempt = 0; attempt < 5 && !agent; attempt += 1) {
-    const reference = generateReference();
-    const stored = {};
-    try {
-      for (const [kind, file] of Object.entries(checked)) stored[kind] = await storeDocument(kind, file, reference);
-      agent = await Agent.create({ ...doc, reference, documents: stored });
-    } catch (err) {
-      // Never leave orphaned documents behind.
-      await deleteDocuments(Object.values(stored).map((d) => d.fileId));
-      if (err?.code !== 11000) throw err;
-      const key = Object.keys(err.keyPattern ?? {})[0];
-      if (key !== 'reference') throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
-      // Reference collision: retry with a new one.
+  try {
+    for (let attempt = 0; attempt < 5 && !agent; attempt += 1) {
+      const reference = generateReference();
+      const stored = {};
+      try {
+        for (const [kind, file] of Object.entries(checked)) stored[kind] = await storeDocument(kind, file, reference);
+        agent = await Agent.create({ ...doc, _id: agentId, reference, documents: stored });
+      } catch (err) {
+        // Never leave orphaned documents behind.
+        await deleteDocuments(Object.values(stored).map((d) => d.fileId));
+        if (err?.code !== 11000) throw err;
+        const key = Object.keys(err.keyPattern ?? {})[0];
+        if (key !== 'reference') throw ApiError.conflict(DUPLICATE_MESSAGE, 'DUPLICATE_REGISTRATION');
+        // Reference collision: retry with a new one.
+      }
     }
+    if (!agent) throw new ApiError(500, 'SERVER_ERROR', 'We could not create a reference. Please try again.');
+  } catch (err) {
+    // Nothing was saved: give the position back.
+    if (position.created) await releasePosition(agentId, doc.pollingUnitCode, doc.agentCategory).catch(() => {});
+    throw err;
   }
-  if (!agent) throw new ApiError(500, 'SERVER_ERROR', 'We could not create a reference. Please try again.');
 
   // The registration is saved. Emails go to the outbox and are sent after the
   // response, within the provider's limits; a queuing problem is logged and
@@ -186,7 +212,8 @@ export async function register(req, res) {
 // Requires both the reference and the registered phone number, and returns
 // status only: no personal details beyond the applicant's first name.
 export async function checkStatus(req, res) {
-  const { reference, phone } = req.body;
+  const { reference, phone, captcha } = req.body;
+  if (!(await verifyCaptcha(captcha, req.ip)).ok) throw new ApiError(400, 'CAPTCHA_FAILED', CAPTCHA_MESSAGE);
   const agent = await Agent.findOne({ reference, phone: normalisePhone(phone) }).select('firstName status createdAt reviewedAt').lean();
   if (!agent) throw ApiError.notFound('We could not find a registration with that reference and phone number. Check both and try again.');
   send(res, {

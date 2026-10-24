@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { ArrowLeft, CircleCheck, CircleX, RotateCcw, Mail, Phone, MessageSquareText, Send, Download, ExternalLink, FileText, Trash2, Eye, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, CircleCheck, CircleX, CircleSlash, RotateCcw, Mail, Phone, MessageSquareText, Send, Download, ExternalLink, FileText, Trash2, Eye, ShieldAlert } from 'lucide-react';
 import { useAdmin, can } from '../context.jsx';
 import { useFetch } from '../../lib/useFetch.js';
 import { Card, PageHeader } from '../ui.jsx';
@@ -16,8 +16,24 @@ import { stateLabel } from '../../../../shared/nigeria.js';
 const ACTIONS = {
   approved: { label: 'Approve registration', verb: 'Approve', icon: CircleCheck, variant: 'primary', body: 'Confirm that you have checked the passport photograph and voter’s card against the details given.' },
   rejected: { label: 'Decline registration', verb: 'Decline', icon: CircleX, variant: 'danger', body: 'The applicant will be told their registration was not approved at this time.' },
-  pending: { label: 'Return to pending', verb: 'Return to pending', icon: RotateCcw, variant: 'secondary', body: 'The registration goes back into the review queue. No message is sent.' },
+  pending: { label: 'Return to pending', verb: 'Return to pending', icon: RotateCcw, variant: 'secondary', body: 'The registration goes back into the review queue. It needs the polling-unit position to be free. No message is sent.' },
+  cancelled: { label: 'Cancel registration', verb: 'Cancel registration', icon: CircleSlash, variant: 'secondary', body: 'Use this when the applicant withdraws or was registered by mistake. The polling-unit position is released for someone else. No message is sent.' },
 };
+
+// Where this registration stands for its Agent 1 / Agent 2 position.
+function PositionNotice({ position, base }) {
+  if (!position) return null;
+  if (position.state === 'holder') return <Alert tone="success" className="mb-6">This registration holds its polling unit’s position.</Alert>;
+  if (position.state === 'released') return <Alert tone="info" className="mb-6">This registration no longer holds a polling-unit position.</Alert>;
+  return (
+    <Alert tone="warning" title="Another registration holds this position" className="mb-6">
+      {position.holderId
+        ? <>The position is held by <Link className="font-semibold underline" to={`${base}/agents/${position.holderId}`}>{position.holderReference ?? 'another registration'}</Link>. Decline or cancel that registration before approving this one. </>
+        : 'The position is being taken by a registration that is still being saved. '}
+      <Link className="font-semibold underline" to={`${base}/positions`}>See all contested positions</Link>.
+    </Alert>
+  );
+}
 
 const titleCase = (s = '') => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -39,7 +55,7 @@ function StatusDialog({ target, agent, onClose, onDone }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const action = ACTIONS[target];
-  const canEmail = !agent.isSample && target !== 'pending';
+  const canEmail = !agent.isSample && ['approved', 'rejected'].includes(target);
 
   const confirm = async () => {
     setBusy(true);
@@ -66,7 +82,7 @@ function StatusDialog({ target, agent, onClose, onDone }) {
       <div className="mt-4 grid gap-4">
         <TextArea label="Reason" optional rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} hint="Recorded in the status history. Not shown to the applicant." />
         {canEmail && <Checkbox checked={send} onChange={setSend}>Email the decision to {agent.email}</Checkbox>}
-        {agent.isSample && target !== 'pending' && <p className="text-sm text-slate-500">Sample records never receive messages.</p>}
+        {agent.isSample && canEmail && <p className="text-sm text-slate-500">Sample records never receive messages.</p>}
         {error && <Alert tone="error">{error}</Alert>}
       </div>
     </Dialog>
@@ -264,7 +280,7 @@ export default function AgentDetail() {
   if (error) return <ErrorState error={error} onRetry={reload} />;
 
   const reviewer = can(user, 'agents:review');
-  const options = ['approved', 'rejected', 'pending'].filter((s) => s !== a.status);
+  const options = ['approved', 'rejected', 'cancelled', 'pending'].filter((s) => s !== a.status);
   const fullName = [a.firstName, a.middleName, a.lastName].filter(Boolean).join(' ');
 
   return (
@@ -281,6 +297,7 @@ export default function AgentDetail() {
       </PageHeader>
 
       {demo && <Alert tone="info" className="mb-6">This is a fictional sample record shown in the demonstration preview.</Alert>}
+      <PositionNotice position={a.position} base={base} />
 
       <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">

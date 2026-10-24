@@ -10,6 +10,7 @@ import { DateField } from '../components/ui/DateField.jsx';
 import { Combobox } from '../components/ui/Combobox.jsx';
 import { FileField } from '../components/ui/FileField.jsx';
 import { Alert } from '../components/ui/Feedback.jsx';
+import { Turnstile, useCaptchaSiteKey } from '../components/Turnstile.jsx';
 import { RegistrationSuccess } from '../components/RegistrationSuccess.jsx';
 import { STEP_SCHEMAS, STEP_FIELDS, todayInLagos } from '../../../shared/schemas.js';
 import { LGA_NAMES, STATE } from '../../../shared/lagos.js';
@@ -322,7 +323,7 @@ function StepIdentity({ register, errors, control }) {
 }
 
 function StepRole({ register, errors, control, watch, setValue }) {
-  const [lga, wardCode, pollingUnitCode] = watch(['lga', 'wardCode', 'pollingUnitCode']);
+  const [lga, wardCode, pollingUnitCode, agentCategory] = watch(['lga', 'wardCode', 'pollingUnitCode', 'agentCategory']);
   const clear = (...names) => names.forEach((n) => setValue(n, ''));
 
   const wards = useLocationList(lga ? `/locations/wards?state=${encodeURIComponent(STATE)}&lga=${encodeURIComponent(lga)}` : null);
@@ -340,7 +341,11 @@ function StepRole({ register, errors, control, watch, setValue }) {
   useEffect(() => { setValue('senatorialDistrict', configured ? wards.data.senatorialDistrict : ''); }, [configured, wards.data, setValue]);
 
   const wardOptions = configured ? wards.data.wards.map((w) => ({ value: w.code, label: w.name, description: w.code })) : [];
-  const unitOptions = units.status === 'ready' ? units.data.map((u) => ({ value: u.code, label: u.name, description: u.code.slice(-3) })) : [];
+  // Shows which agent positions are already filled at each polling unit.
+  const filledNote = (taken = []) => (taken.length >= 2 ? ' · both agents filled' : taken.length ? ` · ${labelFor(AGENT_CATEGORIES, taken[0])} filled` : '');
+  const unitOptions = units.status === 'ready' ? units.data.map((u) => ({ value: u.code, label: u.name, description: `${u.code.slice(-3)}${filledNote(u.taken)}` })) : [];
+  const chosenUnit = units.status === 'ready' ? units.data.find((u) => u.code === pollingUnitCode) : null;
+  const positionFilled = Boolean(chosenUnit && agentCategory && chosenUnit.taken?.includes(agentCategory));
 
   return (
     <div className="grid gap-10">
@@ -424,6 +429,11 @@ function StepRole({ register, errors, control, watch, setValue }) {
                   error={errors.pollingUnitCode?.message}
                 />
               )} />
+            )}
+            {positionFilled && (
+              <Alert tone="warning" title={`The ${labelFor(AGENT_CATEGORIES, agentCategory)} position here is already filled`}>
+                Each polling unit has one Agent 1 and one Agent 2. Check that you chose the right agent type and polling unit. If you were asked to serve here, contact the coordination team.
+              </Alert>
             )}
           </>
         )}
@@ -575,6 +585,9 @@ export default function Register() {
   const [step, setStep] = useState(() => Math.min(draft?.step ?? 0, LAST_DRAFT_STEP));
   const [maxReached, setMaxReached] = useState(() => Math.min(draft?.maxReached ?? 0, LAST_DRAFT_STEP));
   const [submitError, setSubmitError] = useState(null);
+  const captchaOn = Boolean(useCaptchaSiteKey());
+  const [captcha, setCaptcha] = useState('');
+  const [captchaRound, setCaptchaRound] = useState(0);
   const [files, setFiles] = useState({});
   const [fileErrors, setFileErrors] = useState({});
   const stepRef = useRef(step);
@@ -628,6 +641,11 @@ export default function Register() {
     const body = new FormData();
     body.append('data', JSON.stringify(values));
     for (const kind of requiredDocuments()) body.append(kind, files[kind].blob, files[kind].filename);
+    if (captchaOn && !captcha) {
+      setSubmitError({ tone: 'warning', title: 'Complete the security check', message: 'Tick the security check above the button, then submit again.' });
+      return;
+    }
+    if (captcha) body.append('captcha', captcha);
     try {
       const result = await post('/agents/register', body);
       const record = { ...result, email: values.email };
@@ -647,11 +665,15 @@ export default function Register() {
         setSubmitError({ tone: 'error', title: 'Some details need attention', message: 'We have highlighted what to fix.' });
       } else if (err.code === 'DUPLICATE_REGISTRATION') {
         setSubmitError({ tone: 'warning', title: 'You may already be registered', message: err.message, duplicate: true });
+      } else if (err.code === 'CAPTCHA_FAILED') {
+        setSubmitError({ tone: 'warning', title: 'Complete the security check', message: err.message });
       } else if (err.code === 'TOO_LARGE') {
         setSubmitError({ tone: 'error', title: 'Your files are too large', message: err.message });
       } else {
         setSubmitError({ tone: 'error', title: 'Your registration was not sent', message: err.message, retry: err.code === 'NETWORK' || err.status >= 500 || err.status === 429 });
       }
+      // Each security-check token works once: get a new one for the next try.
+      if (captchaOn) { setCaptcha(''); setCaptchaRound((n) => n + 1); }
     }
   };
 
@@ -707,6 +729,7 @@ export default function Register() {
                 {submitError.message}
               </Alert>
             )}
+            {isLast && !registrationClosed && <div className="mt-6"><Turnstile onToken={setCaptcha} resetKey={captchaRound} /></div>}
             {isLast && registrationClosed && (
               <Alert tone="warning" title="Online registration is not connected yet" className="mt-6">
                 The registration database has not been connected, so registrations cannot be submitted. Nothing you entered has been sent anywhere.

@@ -1,9 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, Navigate, NavLink, Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { AnimatePresence, m } from 'framer-motion';
-import { LayoutDashboard, Users, ScrollText, UserCog, LogOut, Menu, X, Eye, ExternalLink } from 'lucide-react';
+import { LayoutDashboard, Users, ScrollText, UserCog, LogOut, Menu, X, Eye, ExternalLink, MapPinned, KeyRound } from 'lucide-react';
 import { Logo } from '../components/brand/Logo.jsx';
-import { Spinner } from '../components/ui/Feedback.jsx';
+import { Alert, Dialog, Spinner } from '../components/ui/Feedback.jsx';
+import { Button } from '../components/ui/Button.jsx';
+import { TextField } from '../components/ui/Field.jsx';
+import { useToast } from '../components/ui/Toast.jsx';
 import { api } from '../lib/api.js';
 import { cx } from '../lib/format.js';
 import { AdminContext, useAdminApiFactory, can, useAdmin } from './context.jsx';
@@ -14,10 +17,12 @@ const Agents = lazy(() => import('./pages/Agents.jsx'));
 const AgentDetail = lazy(() => import('./pages/AgentDetail.jsx'));
 const Audit = lazy(() => import('./pages/Audit.jsx'));
 const Staff = lazy(() => import('./pages/Staff.jsx'));
+const Positions = lazy(() => import('./pages/Positions.jsx'));
 
 const NAV = [
   { to: '', label: 'Overview', icon: LayoutDashboard, permission: 'agents:read', end: true },
   { to: 'agents', label: 'Registrations', icon: Users, permission: 'agents:read' },
+  { to: 'positions', label: 'Contested positions', icon: MapPinned, permission: 'agents:read' },
   { to: 'audit', label: 'Audit log', icon: ScrollText, permission: 'audit:read' },
   { to: 'staff', label: 'Staff accounts', icon: UserCog, permission: 'staff:manage' },
 ];
@@ -46,9 +51,53 @@ function Sidebar({ onNavigate }) {
   );
 }
 
+// Lets the signed-in staff member change their own password.
+function PasswordDialog({ onClose }) {
+  const { api } = useAdmin();
+  const notify = useToast();
+  const [values, setValues] = useState({ currentPassword: '', newPassword: '', confirm: '' });
+  const [errors, setErrors] = useState({});
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const set = (name) => (e) => setValues((v) => ({ ...v, [name]: e.target.value }));
+
+  const save = async () => {
+    setErrors({});
+    setError(null);
+    if (values.newPassword !== values.confirm) { setErrors({ confirm: 'The two new passwords do not match' }); return; }
+    setBusy(true);
+    try {
+      await api.post('/auth/password', { currentPassword: values.currentPassword, newPassword: values.newPassword });
+      notify('Password changed. You were signed out everywhere else.');
+      onClose();
+    } catch (err) {
+      setErrors(err.fields ?? {});
+      if (!Object.keys(err.fields ?? {}).length) setError(err.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onClose={onClose} title="Change your password" footer={
+      <>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button icon={KeyRound} loading={busy} onClick={save}>Change password</Button>
+      </>
+    }>
+      <div className="grid gap-4">
+        <TextField label="Current password" type="password" autoComplete="current-password" value={values.currentPassword} onChange={set('currentPassword')} error={errors.currentPassword} />
+        <TextField label="New password" type="password" autoComplete="new-password" hint="At least 12 characters. A few unrelated words work well." value={values.newPassword} onChange={set('newPassword')} error={errors.newPassword} />
+        <TextField label="Repeat the new password" type="password" autoComplete="new-password" value={values.confirm} onChange={set('confirm')} error={errors.confirm} />
+        {error && <Alert tone="error">{error}</Alert>}
+      </div>
+    </Dialog>
+  );
+}
+
 function Shell() {
   const { user, signOut, demo, base } = useAdmin();
   const [open, setOpen] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const { pathname } = useLocation();
   useEffect(() => setOpen(false), [pathname]);
 
@@ -59,7 +108,12 @@ function Shell() {
       <div className="border-t border-white/10 p-4">
         <p className="truncate text-sm font-semibold text-white">{user.name}</p>
         <p className="truncate text-xs capitalize text-green-50/60">{user.role}</p>
-        <button type="button" onClick={signOut} className="mt-3 flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-green-50/80 hover:bg-white/5 hover:text-white">
+        {!demo && (
+          <button type="button" onClick={() => setChangingPassword(true)} className="mt-3 flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-green-50/80 hover:bg-white/5 hover:text-white">
+            <KeyRound className="size-4" aria-hidden />Change password
+          </button>
+        )}
+        <button type="button" onClick={signOut} className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-green-50/80 hover:bg-white/5 hover:text-white">
           <LogOut className="size-4" aria-hidden />{demo ? 'Leave preview' : 'Sign out'}
         </button>
       </div>
@@ -98,6 +152,7 @@ function Shell() {
         <main id="admin-main" className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <Suspense fallback={<Spinner />}><Outlet /></Suspense>
         </main>
+        {changingPassword && <PasswordDialog onClose={() => setChangingPassword(false)} />}
       </div>
     </div>
   );
@@ -115,6 +170,7 @@ function AdminRoutes() {
         <Route index element={<Overview />} />
         <Route path="agents" element={<Agents />} />
         <Route path="agents/:id" element={<AgentDetail />} />
+        <Route path="positions" element={<Positions />} />
         <Route path="audit" element={<Guard permission="audit:read"><Audit /></Guard>} />
         <Route path="staff" element={<Guard permission="staff:manage"><Staff /></Guard>} />
         <Route path="*" element={<p className="text-slate-600">This page does not exist.</p>} />

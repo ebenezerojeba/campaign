@@ -138,6 +138,7 @@ agentSchema.index({ email: 1 }, { unique: true });
 agentSchema.index({ status: 1, createdAt: -1 });
 agentSchema.index({ agentCategory: 1, status: 1 });
 agentSchema.index({ lga: 1, wardCode: 1, pollingUnitCode: 1 });
+agentSchema.index({ pollingUnitCode: 1, agentCategory: 1, status: 1, createdAt: 1 });
 agentSchema.index({ stateOfOrigin: 1, lgaOfOrigin: 1 });
 agentSchema.index({ 'documents.pvc.sha256': 1 });
 agentSchema.index({ 'nin.last4': 1 });

@@ -8,6 +8,8 @@ import { decryptField } from '../utils/secure.js';
 import { audit } from '../services/audit.js';
 import { queueDecisionEmail, kickOutbox, drainOutbox, outboxStatus } from '../services/outbox.js';
 import { openDocument, deleteDocuments } from '../services/documents.js';
+import * as throttle from '../services/throttle.js';
+import { claimPosition, releasePosition, positionEffect, positionFor, positionConflicts } from '../services/positions.js';
 import { issueStaffSession, clearSession, readStaffToken, STAFF_COOKIE } from '../middleware/index.js';
 import { normalisePhone, POLLING_UNIT_CODE_RE } from '../../../shared/schemas.js';
 import { labelFor, AGENT_CATEGORIES, DOCUMENT_KINDS } from '../../../shared/options.js';
@@ -16,32 +18,28 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // ---------- Auth ----------
 
+// Failed sign-ins are counted per account *and* connection, in the shared
+// store: someone else's wrong guesses can no longer lock an admin out, and the
+// response is the same whether or not the account exists.
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
+const LOCK_MS = LOCK_MINUTES * 60 * 1000;
+const lockKey = (email, ip) => `${email}|${ip}`;
+const lockedError = () => new ApiError(429, 'RATE_LIMITED', `Too many failed attempts. Try again after ${LOCK_MINUTES} minutes.`);
 
 export async function login(req, res) {
   const { email, password } = req.body;
-  const user = await User.findOne({ email }).select('+passwordHash +failedLogins +lockedUntil');
+  const key = lockKey(email, req.ip);
   const invalid = () => ApiError.unauthorized('The email or password is incorrect');
+  if ((await throttle.count('login-fail', key, LOCK_MS)) >= MAX_FAILED) throw lockedError();
 
-  if (!user || !user.active) {
-    await User.hashPassword(password); // equalise timing for unknown accounts
-    throw invalid();
+  const user = await User.findOne({ email }).select('+passwordHash');
+  const ok = user?.active ? await user.verifyPassword(password) : (await User.hashPassword(password), false); // equal timing
+  if (!ok) {
+    const { hits } = await throttle.hit('login-fail', key, LOCK_MS);
+    throw hits >= MAX_FAILED ? lockedError() : invalid();
   }
-  if (user.lockedUntil && user.lockedUntil > new Date()) {
-    throw new ApiError(423, 'ACCOUNT_LOCKED', `Too many failed attempts. Try again after ${LOCK_MINUTES} minutes.`);
-  }
-  if (!(await user.verifyPassword(password))) {
-    user.failedLogins = (user.failedLogins ?? 0) + 1;
-    if (user.failedLogins >= MAX_FAILED) {
-      user.lockedUntil = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
-      user.failedLogins = 0;
-    }
-    await user.save();
-    throw invalid();
-  }
-  user.failedLogins = 0;
-  user.lockedUntil = undefined;
+  await throttle.clear('login-fail', key, LOCK_MS);
   user.lastLoginAt = new Date();
   await user.save();
   issueStaffSession(res, user);
@@ -61,6 +59,28 @@ export async function logout(req, res) {
 
 export async function me(req, res) {
   send(res, req.user.toSafeJSON());
+}
+
+// Lets a signed-in staff member change their own password. Every other
+// session for the account ends; this one continues with a fresh token.
+export async function changePassword(req, res) {
+  const { currentPassword, newPassword } = req.body;
+  const key = lockKey(req.user.email, req.ip);
+  if ((await throttle.count('login-fail', key, LOCK_MS)) >= MAX_FAILED) throw lockedError();
+  const user = await User.findById(req.user._id).select('+passwordHash');
+  if (!(await user.verifyPassword(currentPassword))) {
+    await throttle.hit('login-fail', key, LOCK_MS);
+    throw new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields: { currentPassword: 'Your current password is incorrect' } });
+  }
+  if (await user.verifyPassword(newPassword)) {
+    throw new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields: { newPassword: 'Choose a password different from your current one' } });
+  }
+  user.passwordHash = await User.hashPassword(newPassword);
+  user.tokenVersion += 1;
+  await user.save();
+  issueStaffSession(res, user);
+  await audit(req, { action: 'staff.password_changed', targetType: 'User', targetId: user._id, summary: `${user.name} changed their password` });
+  send(res, { changed: true });
 }
 
 // ---------- Dashboard ----------
@@ -97,6 +117,7 @@ export async function dashboard(_req, res) {
       pending: count('pending'),
       approved: count('approved'),
       rejected: count('rejected'),
+      cancelled: count('cancelled'),
     },
     trend: days,
     byLga: byLga.map((l) => ({ lga: l._id, total: l.total, approved: l.approved })),
@@ -192,8 +213,14 @@ export async function getAgent(req, res) {
       ? { vinLast4: a.identityDetails.vinLast4, apcPartyRegistrationNumberLast4: a.identityDetails.apcPartyRegistrationNumberLast4 }
       : undefined,
     documents: publicDocuments(a.documents),
+    position: await positionFor(a),
     auditTrail,
   });
+}
+
+// Polling-unit positions with more than one Pending or Approved registration.
+export async function listPositionConflicts(_req, res) {
+  send(res, await positionConflicts());
 }
 
 // Sensitive registration values are returned only to admins on an explicit,
@@ -247,19 +274,40 @@ export async function getAgentDocument(req, res) {
 
 export async function updateAgentStatus(req, res) {
   const { status, reason, notify } = req.body;
-  const a = await Agent.findById(req.params.id);
-  if (!a) throw ApiError.notFound('This registration does not exist');
-  if (a.status === status) throw ApiError.conflict(`This registration is already ${status}`);
+  const current = await Agent.findById(req.params.id).select('status reference pollingUnitCode agentCategory').lean();
+  if (!current) throw ApiError.notFound('This registration does not exist');
+  const from = current.status;
+  if (from === status) throw ApiError.conflict(`This registration is already ${status}`);
 
-  const from = a.status;
-  a.status = status;
-  a.reviewedAt = new Date();
-  a.statusHistory.push({ from, to: status, reason, by: req.user._id, byName: req.user.name, at: new Date() });
-  await a.save();
+  // Approving or reinstating needs the polling-unit position; rejecting or
+  // cancelling gives it up.
+  const effect = positionEffect(from, status);
+  let claim = { ok: true, created: false };
+  if (effect === 'claim') {
+    claim = await claimPosition(current._id, current.pollingUnitCode, current.agentCategory);
+    if (!claim.ok) {
+      const who = claim.holder?.reference ? ` by ${claim.holder.reference}` : '';
+      throw ApiError.conflict(`This polling unit's ${labelFor(AGENT_CATEGORIES, current.agentCategory)} position is held${who}. Decline or cancel that registration first.`, 'POSITION_TAKEN');
+    }
+  }
+
+  // Changes only if nobody else changed the status in the meantime.
+  const at = new Date();
+  const a = await Agent.findOneAndUpdate(
+    { _id: current._id, status: from },
+    { $set: { status, reviewedAt: at }, $push: { statusHistory: { from, to: status, reason, by: req.user._id, byName: req.user.name, at } } },
+    { new: true },
+  );
+  if (!a) {
+    if (claim.created) await releasePosition(current._id, current.pollingUnitCode, current.agentCategory).catch(() => {});
+    throw ApiError.conflict('Someone else changed this registration at the same time. Refresh the page and try again.', 'STATUS_CHANGED');
+  }
+  if (effect === 'release') await releasePosition(a._id, a.pollingUnitCode, a.agentCategory);
   await audit(req, { action: 'agent.status_changed', targetType: 'Agent', targetId: a._id, summary: `${a.reference}: ${from} → ${status}`, meta: { from, to: status, reason } });
 
   let notification = null;
-  if (notify && status !== 'pending' && !a.isSample) {
+  // Decision emails are for approvals and declines only; cancelling sends nothing.
+  if (notify && ['approved', 'rejected'].includes(status) && !a.isSample) {
     try {
       await queueDecisionEmail(a);
       kickOutbox({ max: 1, minIntervalMs: 0 });
@@ -286,12 +334,13 @@ export async function addAgentNote(req, res) {
 // Erasure (for example, an applicant's deletion request received by email):
 // removes the record and every uploaded document. The audit entry keeps only the reference.
 export async function deleteAgent(req, res) {
-  const a = await Agent.findById(req.params.id).select('reference documents').lean();
+  const a = await Agent.findById(req.params.id).select('reference documents pollingUnitCode agentCategory').lean();
   if (!a) throw ApiError.notFound('This registration does not exist');
   // Typing the reference confirms a permanent deletion.
   if (a.reference !== req.body.confirmReference) throw ApiError.badRequest('Type the registration reference exactly to confirm deletion');
   await deleteDocuments(Object.values(a.documents ?? {}).map((d) => d?.fileId));
   await Agent.deleteOne({ _id: a._id });
+  await releasePosition(a._id, a.pollingUnitCode, a.agentCategory);
   await audit(req, { action: 'agent.deleted', targetType: 'Agent', targetId: a._id, summary: `Deleted ${a.reference} and its documents`, meta: { reason: req.body.reason } });
   send(res, { deleted: true });
 }

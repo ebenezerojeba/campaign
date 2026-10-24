@@ -59,8 +59,9 @@ export async function prepareFile(kind, file) {
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
 
-  let blob = await toBlob(canvas, 0.88);
-  if (blob && blob.size > rules.maxBytes) blob = await toBlob(canvas, 0.72);
+  // 0.8 keeps text on a voter's card sharp while using about a quarter less storage than 0.88.
+  let blob = await toBlob(canvas, 0.8);
+  if (blob && blob.size > rules.maxBytes) blob = await toBlob(canvas, 0.68);
   if (!blob) throw new FileProblem('Your browser could not prepare this photo. Try another photo or browser.');
   if (blob.size > rules.maxBytes) throw new FileProblem(`This photo is still too large after compression. Use a smaller photo.`);
 

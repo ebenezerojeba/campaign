@@ -64,6 +64,11 @@ export const staffCreateSchema = z.object({
   password: z.string().min(12, 'Use at least 12 characters').max(200),
 });
 
+export const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1, 'Enter your current password').max(200),
+  newPassword: z.string().min(12, 'Use at least 12 characters').max(200),
+});
+
 export const staffUpdateSchema = z.object({
   role: z.enum(['admin', 'reviewer']).optional(),
   active: z.boolean().optional(),

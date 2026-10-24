@@ -60,7 +60,13 @@ export const REGISTRATION_STATUSES = [
   { value: 'pending', label: 'Pending review' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Not approved' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
+
+// Statuses that hold a polling-unit position (Agent 1 or Agent 2). Rejected
+// and cancelled registrations release it.
+export const POSITION_HOLDING_STATUSES = ['pending', 'approved'];
+export const POSITION_CATEGORIES = ['agent_1', 'agent_2'];
 
 export const DOCUMENT_KINDS = [
   { value: 'passport', label: 'Passport photograph' },

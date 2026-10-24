@@ -3,6 +3,8 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.NODE_ENV = 'test';
+// The one-agent-per-position rule has its own tests (positions.test.js).
+process.env.POSITION_RULE = 'off';
 process.env.SMTP_HOST = 'smtp.example.org';
 process.env.SMTP_PORT = '465';
 process.env.SMTP_USER = 'notifications@apclagos.org';

@@ -250,12 +250,15 @@ let lastKick = 0;
 // Starts a small drain without delaying the response. On Vercel the work is
 // kept alive with waitUntil; elsewhere it runs as a detached promise. At most
 // one kick per instance every few seconds.
-export function kickOutbox({ max = 2, minIntervalMs = 5000 } = {}) {
+// Each request may send a small batch after its response. The per-minute and
+// per-hour budgets (EMAIL_MAX_PER_MINUTE / EMAIL_MAX_PER_HOUR) cap the total
+// across all instances, so larger batches only help reach that cap.
+export function kickOutbox({ max = 10, minIntervalMs = 2000 } = {}) {
   if (env.NODE_ENV === 'test') return;
   const nowMs = Date.now();
   if (nowMs - lastKick < minIntervalMs) return;
   lastKick = nowMs;
-  const work = connectDb().then(() => drainOutbox({ max })).catch((err) => console.error('[outbox] drain failed', err?.code ?? err?.name));
+  const work = connectDb().then(() => drainOutbox({ max, timeLimitMs: 20000 })).catch((err) => console.error('[outbox] drain failed', err?.code ?? err?.name));
   if (env.onVercel) {
     try { waitUntil(work); } catch { /* outside a request: the promise still runs */ }
   }

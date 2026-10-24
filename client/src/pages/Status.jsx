@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Search, CircleCheck, Hourglass, CircleX } from 'lucide-react';
+import { Search, CircleCheck, Hourglass, CircleX, CircleSlash } from 'lucide-react';
+import { Turnstile, useCaptchaSiteKey } from '../components/Turnstile.jsx';
 import { Button } from '../components/ui/Button.jsx';
 import { TextField } from '../components/ui/Field.jsx';
 import { Alert } from '../components/ui/Feedback.jsx';
@@ -14,20 +15,28 @@ const RESULT = {
   pending: { Icon: Hourglass, tone: 'bg-gold-50 border-gold-200', iconCls: 'text-gold-600', title: 'Your registration is being reviewed', body: 'The team is checking your details and documents. We will email you when a decision is made.' },
   approved: { Icon: CircleCheck, tone: 'bg-green-50 border-green-100', iconCls: 'text-green-700', title: 'Your registration has been approved', body: 'The coordination team will contact you by email with your next steps.' },
   rejected: { Icon: CircleX, tone: 'bg-danger-50 border-[#f1c9c4]', iconCls: 'text-danger-700', title: 'Your registration was not approved', body: 'If you think your details or documents were incorrect, contact the registration team with your reference.' },
+  cancelled: { Icon: CircleSlash, tone: 'bg-mist border-line', iconCls: 'text-slate-500', title: 'Your registration was cancelled', body: 'If you did not ask for this, contact the registration team with your reference.' },
 };
 
 export default function Status() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({ resolver: zodResolver(statusLookupSchema), mode: 'onTouched' });
+  const captchaOn = Boolean(useCaptchaSiteKey());
+  const [captcha, setCaptcha] = useState('');
+  const [attempt, setAttempt] = useState(0);
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
     setResult(null);
+    if (captchaOn && !captcha) { setError({ message: 'Complete the security check first.' }); return; }
     try {
-      setResult(await post('/agents/status', values));
+      setResult(await post('/agents/status', { ...values, ...(captcha ? { captcha } : {}) }));
     } catch (err) {
       setError(err);
+    } finally {
+      // Each token works once: get a new one for the next check.
+      if (captchaOn) { setCaptcha(''); setAttempt((n) => n + 1); }
     }
   });
 
@@ -42,6 +51,7 @@ export default function Status() {
         <form onSubmit={onSubmit} noValidate className="mt-8 grid gap-5 rounded-[var(--radius-xl)] border border-line bg-paper p-5 shadow-soft sm:p-7">
           <TextField label="Registration reference" placeholder="LAG-7K3M-9QPX" autoCapitalize="characters" autoComplete="off" spellCheck={false} inputClassName="font-mono uppercase tracking-wider" error={errors.reference?.message} {...register('reference')} />
           <TextField label="Phone number" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="0803 123 4567" error={errors.phone?.message} {...register('phone')} />
+          <Turnstile onToken={setCaptcha} resetKey={attempt} />
           <Button type="submit" size="lg" icon={Search} loading={isSubmitting} loadingText="Checking">Check status</Button>
         </form>
 

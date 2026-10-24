@@ -27,7 +27,8 @@ export const DOCUMENT_RULES = {
     // Portrait or square, like a passport photo.
     minAspect: 0.6,
     maxAspect: 1.05,
-    resizeTo: 900,
+    // Large enough to recognise a face on screen and in print.
+    resizeTo: 720,
   },
   pvc: {
     label: "Voter's card (PVC)",

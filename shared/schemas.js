@@ -170,4 +170,6 @@ export const STEP_FIELDS = [
 export const statusLookupSchema = z.object({
   reference: z.string().trim().toUpperCase().regex(/^(LAG|DEMO)-[A-Z0-9]{4}-[A-Z0-9]{4}$/, 'Enter your reference, for example LAG-7K3M-9QPX'),
   phone: phoneSchema,
+  // Cloudflare Turnstile token, checked on the server when CAPTCHA is switched on.
+  captcha: z.string().max(2048).optional(),
 });

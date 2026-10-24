@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
 
 process.env.NODE_ENV = 'test';
+// The one-agent-per-position rule has its own tests (positions.test.js).
+process.env.POSITION_RULE = 'off';
 process.env.JWT_SECRET = 'test-secret-that-is-long-enough-for-hs256-signing';
 process.env.SMTP_HOST = ""; // never send real email from tests
 process.env.DATA_ENCRYPTION_KEY = 'test-only-encryption-key-with-enough-entropy';

@@ -5,6 +5,7 @@ import { env } from '../config/env.js';
 import { connectDb, dbConfigured } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { User, PERMISSIONS } from '../models/User.js';
+import { MongoRateLimitStore } from '../services/throttle.js';
 
 // ---------- Validation ----------
 
@@ -138,29 +139,45 @@ export const requirePermission = (permission) => (req, _res, next) => {
 };
 
 // ---------- Rate limits ----------
-// In-memory counters: effective per server instance. For multi-instance
-// production traffic, back these with a shared store (see README).
+// Registration, sign-in and status lookup count in MongoDB, so the limits hold
+// across every Vercel instance. If the store cannot be reached the request is
+// allowed (a database outage must not block registration on its own). The
+// general API limit stays in memory: it only absorbs bursts.
 
-const limiter = (windowMinutes, limit, message) =>
+const limiter = (windowMinutes, limit, message, shared) =>
   rateLimit({
     windowMs: windowMinutes * 60 * 1000,
     limit,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    skip: () => env.NODE_ENV === 'test',
+    skip: () => env.NODE_ENV === 'test' && !process.env.RATE_LIMITS_IN_TESTS,
+    ...(shared ? { store: new MongoRateLimitStore(shared), passOnStoreError: true } : {}),
     handler: (_req, _res, next) => next(new ApiError(429, 'RATE_LIMITED', message)),
   });
 
 export const limits = {
   api: limiter(1, 300, 'Too many requests. Wait a minute and try again.'),
-  register: limiter(15, 10, 'Too many registration attempts from this connection. Wait 15 minutes and try again.'),
-  login: limiter(15, 10, 'Too many sign-in attempts. Wait 15 minutes and try again.'),
-  lookup: limiter(15, 20, 'Too many status checks. Wait 15 minutes and try again.'),
+  // Generous per connection: Nigerian mobile networks put many people behind
+  // one IP address, and coordinators may register a team from one phone.
+  register: limiter(15, 30, 'Too many registration attempts from this connection. Wait 15 minutes and try again.', 'register'),
+  login: limiter(15, 10, 'Too many sign-in attempts. Wait 15 minutes and try again.', 'login'),
+  lookup: limiter(15, 40, 'Too many status checks. Wait 15 minutes and try again.', 'lookup'),
 };
 
 // ---------- Errors ----------
 
 export const notFound = (_req, _res, next) => next(ApiError.notFound('This API route does not exist'));
+
+const scrub = (text) => String(text ?? '')
+  .replace(/dup key: \{[^}]*\}/g, 'dup key: {…}')
+  .replace(/\S+@\S+/g, '[address]')
+  .replace(/\d{6,}/g, '[number]')
+  .slice(0, 300);
+
+export function safeError(err) {
+  const frames = String(err?.stack ?? '').split('\n').slice(1, 6).join('\n');
+  return { name: err?.name, code: err?.code, message: scrub(err?.message), stack: frames };
+}
 
 // eslint-disable-next-line no-unused-vars
 export const errorHandler = (err, req, res, _next) => {
@@ -178,7 +195,9 @@ export const errorHandler = (err, req, res, _next) => {
   }
 
   if (!(error instanceof ApiError)) {
-    console.error('[error]', req.method, req.originalUrl, err);
+    // Never log values: duplicate-key and validation messages can contain
+    // emails, phone numbers or hashes.
+    console.error('[error]', req.method, req.path, safeError(err));
     error = new ApiError(500, 'SERVER_ERROR', 'Something went wrong on our side. Please try again.');
   }
   const body = { ok: false, error: { code: error.code, message: error.message } };

@@ -59,6 +59,13 @@ export const env = {
     // whole sending allowance for applicants. Change only with approval.
     adminAlertMode: ['digest', 'off'].includes(process.env.ADMIN_ALERT_MODE) ? process.env.ADMIN_ALERT_MODE : 'instant',
   },
+  // Cloudflare Turnstile on registration and status lookup; off unless both keys are set.
+  captcha: {
+    siteKey: (process.env.TURNSTILE_SITE_KEY || '').trim(),
+    secretKey: (process.env.TURNSTILE_SECRET_KEY || '').trim(),
+  },
+  // One Agent 1 and one Agent 2 per polling unit ('on'), or no limit ('off').
+  positionRule: process.env.POSITION_RULE === 'off' ? 'off' : 'on',
   // Encrypts NIN values when that field is switched on (shared/agentForm.js).
   dataEncryptionKey: process.env.DATA_ENCRYPTION_KEY || '',
   contact: {

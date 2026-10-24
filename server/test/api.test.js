@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
 
 process.env.NODE_ENV = 'test';
+// The one-agent-per-position rule has its own tests (positions.test.js).
+process.env.POSITION_RULE = 'off';
 process.env.JWT_SECRET = 'test-secret-that-is-long-enough-for-hs256-signing';
 process.env.SMTP_HOST = ''; // never send real email from tests
 process.env.DATA_ENCRYPTION_KEY = 'test-only-encryption-key-with-enough-entropy';
@@ -322,14 +324,17 @@ describe('administration', () => {
     assert.equal(res.status, 403);
   });
 
-  test('wrong passwords are rejected and accounts lock after repeated failures', async () => {
-    for (let i = 0; i < 5; i += 1) {
-      const res = await request(app).post('/api/admin/auth/login').set(fetchHeader).send({ email: 'rev@test.org', password: 'nope' });
-      assert.equal(res.status, 401);
-    }
-    const locked = await request(app).post('/api/admin/auth/login').set(fetchHeader).send({ email: 'rev@test.org', password: 'correct-horse-battery' });
-    assert.equal(locked.status, 423);
-    await User.updateOne({ email: 'rev@test.org' }, { $unset: { lockedUntil: 1 }, failedLogins: 0 });
+  test('wrong passwords are rejected and sign-in locks after repeated failures, the same for unknown accounts', async () => {
+    const attempt = (email, password, ip) => request(app).post('/api/admin/auth/login').set(fetchHeader).set('X-Forwarded-For', ip).send({ email, password });
+    for (let i = 0; i < 4; i += 1) assert.equal((await attempt('rev@test.org', 'nope', '203.0.113.7')).status, 401);
+    assert.equal((await attempt('rev@test.org', 'nope', '203.0.113.7')).status, 429, 'the 5th failure locks');
+    assert.equal((await attempt('rev@test.org', 'correct-horse-battery', '203.0.113.7')).status, 429, 'even the right password waits');
+    // Another connection is not locked out by someone else's guesses.
+    assert.equal((await attempt('rev@test.org', 'correct-horse-battery', '198.51.100.9')).status, 200);
+    // An account that does not exist behaves exactly the same.
+    for (let i = 0; i < 4; i += 1) assert.equal((await attempt('ghost@test.org', 'nope', '203.0.113.7')).status, 401);
+    assert.equal((await attempt('ghost@test.org', 'nope', '203.0.113.7')).status, 429);
+    await mongoose.connection.db.collection('ratelimits').deleteMany({});
   });
 
   test('staff can search, filter and see the saved values', async () => {
