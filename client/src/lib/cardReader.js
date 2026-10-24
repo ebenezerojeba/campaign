@@ -21,8 +21,11 @@ const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, reje
 // Draws the photo larger, in greyscale with more contrast, optionally rotated:
 // small card print reads much better this way.
 async function prepare(blob, rotate) {
-  const bitmap = await createImageBitmap(blob);
-  const scale = Math.min(2.2, 2000 / Math.max(bitmap.width, bitmap.height));
+  // imageOrientation applies the phone's rotation flag, as the upload step does.
+  const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+  // Up to 3,000 pixels on the long side: a full-size phone photo keeps its
+  // detail, and a small image is enlarged so the print is big enough to read.
+  const scale = Math.min(2.2, 3000 / Math.max(bitmap.width, bitmap.height));
   const w = Math.round(bitmap.width * scale);
   const h = Math.round(bitmap.height * scale);
   const sideways = rotate % 180 !== 0;
@@ -30,7 +33,7 @@ async function prepare(blob, rotate) {
   canvas.width = sideways ? h : w;
   canvas.height = sideways ? w : h;
   const ctx = canvas.getContext('2d');
-  ctx.filter = 'grayscale(1) contrast(1.5)';
+  ctx.filter = 'grayscale(1) contrast(1.25)';
   ctx.translate(canvas.width / 2, canvas.height / 2);
   ctx.rotate((rotate * Math.PI) / 180);
   ctx.drawImage(bitmap, -w / 2, -h / 2, w, h);
@@ -42,7 +45,7 @@ async function prepare(blob, rotate) {
 // Cards are landscape: a portrait photo is tried turned both ways.
 export async function readCard(blob, { timeoutMs = 60000 } = {}) {
   const worker = await withTimeout(getWorker(), timeoutMs);
-  const probe = await createImageBitmap(blob);
+  const probe = await createImageBitmap(blob, { imageOrientation: 'from-image' });
   const portrait = probe.height > probe.width;
   probe.close();
   let text = '';

@@ -43,6 +43,12 @@ export async function recordReviewerCheck(agentId, input, user) {
 // The latest check of each kind for one registration.
 export async function latestChecks(agentId) {
   const [applicant, reviewer] = await Promise.all(['applicant', 'reviewer'].map((source) => IdentityCheck.findOne({ agent: agentId, source }).sort({ createdAt: -1 }).lean()));
-  const view = (c) => c && { ...c, flagged: isFlagged(c) };
+  // Re-read stored results under the current rules, so older checks follow them too.
+  const view = (c) => {
+    if (!c) return c;
+    const face = typeof c.face?.distance === 'number' ? { ...c.face, result: faceResult(c.face.distance) } : c.face;
+    const current = { ...c, face };
+    return { ...current, flagged: isFlagged(current) };
+  };
   return { applicant: view(applicant), reviewer: view(reviewer) };
 }

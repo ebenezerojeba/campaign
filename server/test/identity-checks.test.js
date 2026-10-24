@@ -93,6 +93,7 @@ test('reads a VIN from card text, with spaces, a label and look-alike characters
   assert.equal(card.dateFound(text, '1991-05-17'), false);
   assert.equal(card.faceResult(0.4), 'match');
   assert.equal(card.faceResult(0.55), 'uncertain');
+  assert.equal(card.faceResult(0.7), 'uncertain', 'printed card photos push distances up');
   assert.equal(card.faceResult(0.8), 'different');
   assert.equal(card.faceResult(null), 'no_face');
 });
@@ -104,7 +105,7 @@ test('the applicant check is stored apart from the registration, as information 
   const a = await Agent.findOne({ reference: res.body.data.reference }).lean();
   assert.equal(a.cardCheck, undefined, 'not part of the registration');
   const stored = await IdentityCheck.findOne({ agent: a._id }).lean();
-  assert.deepEqual([stored.source, stored.vin.result, stored.vin.applicantConfirmed, stored.flagged], ['applicant', 'close', true, true]);
+  assert.deepEqual([stored.source, stored.vin.result, stored.vin.applicantConfirmed, stored.flagged], ['applicant', 'close', true, false], 'a confirmed near-miss is information, not a flag');
 });
 
 test('reviewer check: the server compares the VIN; no VIN or card text is stored or returned', async () => {

@@ -65,5 +65,7 @@ export async function prepareFile(kind, file) {
   if (!blob) throw new FileProblem('Your browser could not prepare this photo. Try another photo or browser.');
   if (blob.size > rules.maxBytes) throw new FileProblem(`This photo is still too large after compression. Use a smaller photo.`);
 
-  return { blob, filename: `${kind}.jpg`, type: 'image/jpeg', bytes: blob.size, width: canvas.width, height: canvas.height, previewUrl: URL.createObjectURL(blob), originalName: file.name };
+  // `original` is the full-size photo, kept on the device only: the card check
+  // reads it because small print is far clearer before shrinking. Only `blob` is uploaded.
+  return { blob, original: file, filename: `${kind}.jpg`, type: 'image/jpeg', bytes: blob.size, width: canvas.width, height: canvas.height, previewUrl: URL.createObjectURL(blob), originalName: file.name };
 }

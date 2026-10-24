@@ -33,6 +33,8 @@ identityCheckSchema.index({ flagged: 1, source: 1 });
 
 export const IdentityCheck = mongoose.models.IdentityCheck || mongoose.model('IdentityCheck', identityCheckSchema, 'identitychecks');
 
-export const isFlagged = (c) => Boolean(
-  c && (['mismatch', 'close'].includes(c.vin?.result) || c.face?.result === 'different' || c.vin?.applicantConfirmed),
-);
+// Only confident results raise a flag (and so need a reason to approve): a
+// clean VIN reading that is clearly different, or a strongly different face.
+// Uncertain readings, typos the applicant confirmed, and "not found" results
+// are shown to the reviewer as information only.
+export const isFlagged = (c) => Boolean(c && (c.vin?.result === 'mismatch' || c.face?.result === 'different'));

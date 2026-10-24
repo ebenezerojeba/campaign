@@ -17,31 +17,53 @@ function api() {
   return ready;
 }
 
-async function toCanvas(blob) {
-  const bitmap = await createImageBitmap(blob);
+// Draws part of an image (fractions of its width and height) enlarged to about
+// `size` pixels on the long side.
+function crop(bitmap, [x, y, w, h], size) {
+  const sw = bitmap.width * w;
+  const sh = bitmap.height * h;
+  const scale = size / Math.max(sw, sh);
   const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  canvas.getContext('2d').drawImage(bitmap, 0, 0);
-  bitmap.close();
+  canvas.width = Math.round(sw * scale);
+  canvas.height = Math.round(sh * scale);
+  canvas.getContext('2d').drawImage(bitmap, bitmap.width * x, bitmap.height * y, sw, sh, 0, 0, canvas.width, canvas.height);
   return canvas;
 }
 
-// The descriptor of the largest face in the image, or null when none is found.
-async function largestFace(faceapi, blob) {
-  const faces = await faceapi.detectAllFaces(await toCanvas(blob), new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
-    .withFaceLandmarks()
-    .withFaceDescriptors();
-  if (!faces.length) return null;
-  faces.sort((a, b) => b.detection.box.area - a.detection.box.area);
-  return faces[0].descriptor;
+// The face detector shrinks whatever it is given to a small square, so the
+// tiny photo printed on a card can vanish. Searching halves and quarters of
+// the card, enlarged, makes that face big enough to find.
+const CARD_REGIONS = [
+  [0, 0, 1, 1],
+  [0, 0, 0.5, 1], [0.5, 0, 0.5, 1],
+  [0, 0, 0.5, 0.6], [0, 0.4, 0.5, 0.6], [0.5, 0, 0.5, 0.6], [0.5, 0.4, 0.5, 0.6],
+];
+
+// The descriptor of the clearest face found, or null when none is found.
+async function bestFace(faceapi, blob, regions) {
+  const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+  let best = null;
+  try {
+    for (const region of regions) {
+      const faces = await faceapi.detectAllFaces(crop(bitmap, region, 1024), new faceapi.SsdMobilenetv1Options({ minConfidence: 0.25 }))
+        .withFaceLandmarks()
+        .withFaceDescriptors();
+      for (const f of faces) {
+        if (!best || f.detection.score > best.detection.score) best = f;
+      }
+      if (best && best.detection.score > 0.8) break; // clear enough: stop searching
+    }
+  } finally {
+    bitmap.close();
+  }
+  return best?.descriptor ?? null;
 }
 
 // Returns { distance } (lower = more alike) or { distance: null } with which photo had no face.
 export async function compareFaces(passportBlob, cardBlob) {
   const faceapi = await api();
-  const passport = await largestFace(faceapi, passportBlob);
-  const card = await largestFace(faceapi, cardBlob);
+  const passport = await bestFace(faceapi, passportBlob, [[0, 0, 1, 1]]);
+  const card = await bestFace(faceapi, cardBlob, CARD_REGIONS);
   if (!passport || !card) return { distance: null, passportFace: Boolean(passport), cardFace: Boolean(card) };
   return { distance: Math.round(faceapi.euclideanDistance(passport, card) * 1000) / 1000, passportFace: true, cardFace: true };
 }

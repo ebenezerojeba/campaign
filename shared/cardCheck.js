@@ -94,10 +94,11 @@ export function dateFound(text, isoDate) {
 }
 
 // Face similarity from the distance between two face descriptors (lower is
-// more similar). Card photos are small and printed, so the bands are wide.
+// more similar). Card photos are small and printed, which pushes even the same
+// person's distance up, so "different" is kept for a strong difference only.
 export function faceResult(dist) {
   if (dist === null || dist === undefined || Number.isNaN(dist)) return 'no_face';
   if (dist <= 0.5) return 'match';
-  if (dist <= 0.62) return 'uncertain';
+  if (dist <= 0.75) return 'uncertain';
   return 'different';
 }

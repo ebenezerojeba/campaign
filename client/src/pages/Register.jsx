@@ -642,7 +642,7 @@ export default function Register() {
     let cancelled = false;
     setCardScan({ status: 'reading', candidates: [] });
     import('../lib/cardReader.js')
-      .then(({ readCard }) => readCard(pvc.blob))
+      .then(({ readCard }) => readCard(pvc.original ?? pvc.blob))
       .then(({ candidates }) => { if (!cancelled) setCardScan({ status: 'done', candidates }); })
       .catch(() => { if (!cancelled) setCardScan({ status: 'failed', candidates: [] }); });
     return () => { cancelled = true; };
