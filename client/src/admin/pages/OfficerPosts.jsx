@@ -11,7 +11,7 @@ import { LGA_NAMES } from '../../../../shared/lagos.js';
 const STATUS = { vacant: ['neutral', 'Vacant'], pending: ['pending', 'Pending review'], approved: ['approved', 'Approved'] };
 const accessText = (d) => (!d ? 'Not given' : !d.active ? 'Switched off' : d.passwordSet ? 'Active' : 'Invited');
 
-// All 20 LGA and 245 ward collation officer posts: filled, vacant or contested.
+// All 20 LGA and 245 ward collation officer positions: filled, vacant or contested.
 export default function OfficerPosts() {
   const { api, base } = useAdmin();
   const { data, loading, error, reload } = useFetch((signal) => api.get('/officers/posts', { signal }), 'officer-posts');
@@ -34,15 +34,15 @@ export default function OfficerPosts() {
 
   return (
     <>
-      <PageHeader title="Collation officer posts" description="One LGA Collation Officer per LGA and one Ward Collation Officer per ward, from the official INEC list. Pending and approved registrations hold a post." />
-      <div className="mb-4 flex gap-2" role="tablist" aria-label="Post type">
-        {[['ward', `Ward posts (${data.ward.capacity})`], ['lga', `LGA posts (${data.lga.capacity})`]].map(([key, label]) => (
+      <PageHeader title="Collation officer positions" description="One LGA Collation Officer position per LGA and one Ward Collation Officer position per ward, from the official INEC list. A registration that is pending review or approved fills its position." />
+      <div className="mb-4 flex gap-2" role="tablist" aria-label="Position type">
+        {[['ward', `Ward Collation Officer (${data.ward.capacity})`], ['lga', `LGA Collation Officer (${data.lga.capacity})`]].map(([key, label]) => (
           <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`rounded-lg px-4 py-2 text-sm font-semibold ${tab === key ? 'bg-forest-900 text-white' : 'bg-white text-forest-900 ring-1 ring-line hover:bg-mist'}`}>{label}</button>
         ))}
       </div>
-      {!s.reconciled && <Alert tone="warning" className="mb-4">The configured number of posts ({s.capacity}) does not match the official data ({s.locations} locations). Check the settings before relying on the vacancy figures.</Alert>}
+      {!s.reconciled && <Alert tone="warning" className="mb-4">The configured number of positions ({s.capacity}) does not match the official data ({s.locations} locations). Check the settings before relying on the vacancy figures.</Alert>}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Filled" value={s.filled} icon={MapPinned} hint={`of ${s.capacity} posts`} />
+        <StatTile label="Filled" value={s.filled} icon={MapPinned} hint={`of ${s.capacity} positions`} />
         <StatTile label="Approved" value={s.approved} tone="approved" />
         <StatTile label="Vacant" value={s.vacant} />
         <StatTile label="Contested" value={s.contested} tone={s.contested ? 'rejected' : 'default'} hint={s.contested ? 'More than one active registration' : undefined} />
@@ -72,7 +72,7 @@ export default function OfficerPosts() {
             })}
           </tbody>
         </table>
-        {posts.length === 0 && <p className="p-5 text-sm text-slate-500">No posts match these filters.</p>}
+        {posts.length === 0 && <p className="p-5 text-sm text-slate-500">No positions match these filters.</p>}
       </div>
     </>
   );

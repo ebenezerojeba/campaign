@@ -70,10 +70,10 @@ export default function OfficerDashboard() {
           </>
         )}
       />
-      <Alert tone="info" className="mb-6">These figures cover {where} only. They show which positions are filled, never applicants’ personal details.</Alert>
+      <Alert tone="info" className="mb-6">These figures cover {where} only. They show which positions are filled and vacant, never applicants’ personal details.</Alert>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {data.level === 'lga' && <StatTile label="Wards" value={totals.wards} icon={MapPinned} hint={`${totals.wardOfficersFilled} of ${totals.wards} ward officer posts filled`} />}
+        {data.level === 'lga' && <StatTile label="Wards" value={totals.wards} icon={MapPinned} hint={`${totals.wardOfficersFilled} of ${totals.wards} Ward Collation Officer positions filled`} />}
         <StatTile label="Polling units" value={totals.pollingUnits} icon={MapPinned} />
         <StatTile label="Agent positions filled" value={totals.filled} tone="pending" hint={`of ${formatNumber(totals.agentPositions)} (Agent 1 and Agent 2)`} />
         <StatTile label="Approved agents" value={totals.approved} tone="approved" />
@@ -85,7 +85,7 @@ export default function OfficerDashboard() {
           <div className="overflow-x-auto">
             {data.level === 'lga' ? (
               <table className="w-full min-w-[720px]">
-                <thead className="border-b border-line bg-paper"><tr><th className={th}>Ward</th><th className={th}>Polling units</th><th className={th}>Filled</th><th className={th}>Approved</th><th className={th}>Vacant</th><th className={th}>Ward officer post</th></tr></thead>
+                <thead className="border-b border-line bg-paper"><tr><th className={th}>Ward</th><th className={th}>Polling units</th><th className={th}>Filled</th><th className={th}>Approved</th><th className={th}>Vacant</th><th className={th}>Ward Collation Officer</th></tr></thead>
                 <tbody className="divide-y divide-line">
                   {rows.map((w) => (
                     <tr key={w.code}>

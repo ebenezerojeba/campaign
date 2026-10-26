@@ -61,7 +61,7 @@ export async function grantOfficerAccess(agentId) {
   if (!role) throw new AccessProblem('Only LGA and Ward Collation Officers get a dashboard.');
   if (agent.isSample) throw new AccessProblem('Sample records cannot be given access.');
   if (agent.status !== 'approved') throw new AccessProblem('Approve the registration before giving dashboard access.');
-  if (!(await holdsPosition(agent))) throw new AccessProblem('This registration does not hold its post. Settle the contested post first.');
+  if (!(await holdsPosition(agent))) throw new AccessProblem('This registration does not hold its position. Settle the contested position first.');
 
   const level = levelOf(agent.agentCategory);
   const assignment = { agent: agent._id, level, lga: agent.lga, ...(level === 'ward' ? { wardCode: agent.wardCode, ward: agent.ward } : {}) };

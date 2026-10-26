@@ -9,7 +9,7 @@ import { useConfig, whatsappLink } from '../lib/config.jsx';
 export function RegistrationSuccess({ result, onReset }) {
   const { contact } = useConfig();
   const [copied, setCopied] = useState(false);
-  const wa = whatsappLink(contact.whatsapp, `Hello, I just registered as a polling unit agent. My reference is ${result.reference}.`);
+  const wa = whatsappLink(contact.whatsapp, `Hello, I have just registered with APC Lagos. My reference is ${result.reference}.`);
 
   const copy = async () => {
     try {
@@ -58,7 +58,7 @@ export function RegistrationSuccess({ result, onReset }) {
             <h2 className="mt-10 font-display text-2xl font-semibold text-forest-900">What happens next</h2>
             <ol className="mt-5 space-y-5">
               {[
-                ['The team checks your details and documents.', 'Registrations are reviewed in the order they arrive, and a person checks every voter’s card.'],
+                ['The coordination team checks your details and documents.', 'Registrations are reviewed in the order they arrive, and a person checks every voter’s card.'],
                 ['We email you the decision.', `It goes to ${result.email}. Check your spam folder if you do not see it.`],
                 ['Check your status at any time.', 'Use your reference and phone number on the status page.'],
               ].map(([title, body], i) => (
@@ -74,7 +74,7 @@ export function RegistrationSuccess({ result, onReset }) {
 
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <ButtonLink to="/status" variant="primary" icon={Search}>Check registration status</ButtonLink>
-              {wa && <ButtonLink href={wa} target="_blank" rel="noreferrer" variant="secondary" icon={MessageCircle}>Message the team on WhatsApp</ButtonLink>}
+              {wa && <ButtonLink href={wa} target="_blank" rel="noreferrer" variant="secondary" icon={MessageCircle}>Message the coordination team on WhatsApp</ButtonLink>}
               <Button variant="ghost" icon={UserPlus} onClick={onReset}>Register someone else on this device</Button>
             </div>
           </div>

@@ -403,7 +403,7 @@ describe('administration', () => {
     assert.equal(res.status, 200);
     assert.match(res.text, /"'=HYPERLINK\(""http:\/\/evil""\)"/);
     const header = res.text.replace(/^﻿/, '').split('\r\n')[0].split(',');
-    for (const col of ['Agent type', 'Email', 'Date of birth', 'State of origin', 'Ward', 'Polling unit code', 'Bank', 'Account number', 'NIN', 'VIN', 'APC party registration number', 'Passport photograph', "Voter's card"]) assert.ok(header.includes(col), col);
+    for (const col of ['Role', 'Email', 'Date of birth', 'State of origin', 'Ward', 'Polling unit code', 'Bank', 'Account number', 'NIN', 'VIN', 'APC party registration number', 'Passport photograph', "Voter's card"]) assert.ok(header.includes(col), col);
     assert.ok(!/sha256|fileId|GPS/i.test(res.text));
     assert.match(res.text, /Agent 1/);
     assert.match(res.text, /17\/05\/1990/);

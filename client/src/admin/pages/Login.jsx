@@ -13,7 +13,7 @@ import { api } from '../../lib/api.js';
 import { useConfig } from '../../lib/config.jsx';
 
 const schema = z.object({
-  email: z.string().trim().email('Enter your staff email address'),
+  email: z.string().trim().email('Enter your email address'),
   password: z.string().min(1, 'Enter your password'),
 });
 
@@ -42,8 +42,8 @@ export default function Login() {
         <Logo />
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">
           <span className="flex size-12 items-center justify-center rounded-xl bg-mist text-forest-900"><Lock className="size-6" aria-hidden /></span>
-          <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-forest-900">Staff sign in</h1>
-          <p className="mt-2 text-[15px] text-slate-500">For authorised registration administrators and reviewers. Accounts are created by an administrator.</p>
+          <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-forest-900">Sign in</h1>
+          <p className="mt-2 text-[15px] text-slate-500">For APC Lagos staff and approved collation officers. There is no public sign-up: staff accounts are created by an administrator, and collation officers receive an invitation by email.</p>
 
           {params.get('expired') && <Alert tone="info" className="mt-6">Your session ended. Sign in again to continue.</Alert>}
           {dbMissing && (

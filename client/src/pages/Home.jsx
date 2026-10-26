@@ -29,7 +29,7 @@ function Hero() {
           {loaded && registrationOpen && (
             <m.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-medium text-green-50">
               <span className="relative flex size-2"><span className="absolute inline-flex size-full animate-ping rounded-full bg-gold-500 opacity-60 motion-reduce:hidden" /><span className="relative inline-flex size-2 rounded-full bg-gold-500" /></span>
-              Agent registration is open across Lagos State
+              Registration is open across Lagos State
             </m.p>
           )}
           <h1 id="hero-title" className="type-hero">
@@ -99,7 +99,7 @@ function Requirements() {
       <div className="container-page grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
         <div className="lg:sticky lg:top-28 lg:self-start">
           <h2 id="req-title" className="type-h2 text-forest-900">Have these ready before you start</h2>
-          <p className="type-lead mt-6 text-slate-600">Registration is for people who will serve at a polling unit in Lagos State. The team checks every registration before approving it.</p>
+          <p className="type-lead mt-6 text-slate-600">Registration is for people who will serve in Lagos State as Agent 1, Agent 2, a Ward Collation Officer or an LGA Collation Officer. The coordination team checks every registration before approving it.</p>
           <ButtonLink to="/register" variant="dark" className="mt-8" iconRight={ArrowRight}>Start registration</ButtonLink>
         </div>
         <ul className="grid gap-px overflow-hidden rounded-[var(--radius-xl)] border border-line bg-line sm:grid-cols-2">
@@ -146,7 +146,7 @@ function HowItWorks() {
 }
 
 const DATA_POINTS = [
-  { icon: Lock, title: 'Stored securely', body: 'Documents are kept in a protected database, never at a public link. Only authorised registration staff can open them.' },
+  { icon: Lock, title: 'Stored securely', body: 'Documents are kept in private storage, never at a public link. Only authorised staff can open them.' },
   { icon: EyeOff, title: 'Every view is logged', body: 'Each time a staff member opens a record or a document, the system records who and when.' },
   { icon: FileCheck2, title: 'Checked, not certified', body: 'Uploads are checked to be real, complete images or PDFs. That does not prove a voter’s card is genuine: staff verify cards separately.' },
   { icon: Trash2, title: 'Kept only as long as needed', body: 'Registrations and documents are deleted after the retention period, or sooner if you ask.' },
@@ -228,7 +228,7 @@ function ClosingCta() {
             <AdireTile motif="oniko" palette="green" className="size-full" />
           </div>
           <div className="relative max-w-xl">
-            <h2 id="cta-title" className="type-h2">Every polling unit needs its people</h2>
+            <h2 id="cta-title" className="type-h2">Every polling unit, ward and LGA needs its people</h2>
             <p className="type-lead mt-4 text-green-50/90">Have your passport photograph and voter’s card ready. Registration takes about ten minutes and is free.</p>
             <ButtonLink to="/register" variant="gold" size="lg" className="mt-8" iconRight={ArrowRight}>Start registration</ButtonLink>
           </div>

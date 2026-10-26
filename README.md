@@ -1,9 +1,10 @@
-# APC Lagos Polling Unit Agent Registration
+# APC Lagos Digital Management System
 
-Registration for APC Lagos agents, canvassers, mobilizers and polling unit agents, with document upload and a staff administration dashboard. Live at https://apcagent.vercel.app.
+Registration and management for APC Lagos Agent 1, Agent 2, Ward Collation Officers and LGA Collation Officers: document upload, one person per position, separate dashboards for staff and collation officers, and a reports and downloads centre. Live at https://www.apclagos.org.
 
-- **Public site**: landing page, a four-step mobile-first registration form (details, role and polling unit, documents, review and consent), and a status check by reference and phone number.
-- **Admin** (`/admin`): role-based dashboard with registration trends and LGA and agent-type summaries; a searchable, filterable registration list (agent type, LGA, ward, polling unit, senatorial district, origin, dates); detail pages with the passport photograph, voter’s card and masked identity and bank details (administrators can reveal them, audit-logged), approval workflow with reasons, notes and decision emails; permanent deletion; CSV export; audit log; staff accounts.
+- **Public site**: landing page, a five-step mobile-first registration form (details, role and location, identity and bank details, documents, review and consent), and a status check by reference and phone number.
+- **Admin** (`/admin`): role-based dashboard with registration trends and LGA and role summaries; collation officer positions (filled, vacant, contested); a searchable, filterable registration list (role, LGA, ward, polling unit, senatorial district, origin, dates); detail pages with the passport photograph, voter’s card and masked identity and bank details (administrators can reveal them, audit-logged), approval workflow with reasons, notes and decision emails; permanent deletion; reports and downloads (Excel and CSV); audit log; accounts.
+- **Collation officer dashboard** (`/admin`, for approved Ward and LGA Collation Officers): filled and vacant positions for their own ward or LGA only, with an Excel/CSV summary.
 
 ## Architecture
 
@@ -41,7 +42,7 @@ Responses are `{ ok: true, data, meta? }` or `{ ok: false, error: { code, messag
 
 ## The registration form
 
-- **Required**: first and last name (middle name optional), date of birth, email (validated in the browser and on the server), Nigerian mobile number, state and LGA of origin (from `pollingunit/nigeria-states-lgas.json`), agent type (Agent 1 or Agent 2), LGA, ward and polling unit (official INEC data), NIN, VIN, APC party registration number, bank name, account name, account number, passport photograph and voter’s card.
+- **Required**: first and last name (middle name optional), date of birth, email (validated in the browser and on the server), Nigerian mobile number, state and LGA of origin (from `pollingunit/nigeria-states-lgas.json`), role (Agent 1, Agent 2, Ward Collation Officer or LGA Collation Officer) and the location for that role (LGA; plus ward for Ward Collation Officers; plus ward and polling unit for agents, from the official INEC data), NIN, VIN, APC party registration number, bank name, account name, account number, passport photograph and voter’s card.
 - **Date of birth**: typed as DD/MM/YYYY or picked from the device calendar; must be a real date, not in the future and not before 1900. No age rule is applied, because APC Lagos has not supplied an official eligibility rule. Stored as a MongoDB `Date`.
 - **Identification and bank rules**: NIN exactly 11 digits; account number exactly 10 digits; bank chosen from the list in `shared/options.js`. INEC and APC have not published formats that could be verified, so the VIN (letters and digits, 6 to 30 characters) and party registration number (letters, digits, spaces, hyphens or slashes, 3 to 40 characters) get only conservative checks and are labelled “format pending official rules”. Values are trimmed and otherwise kept exactly as typed: malformed input is rejected, never corrected.
 - **Not verified**: no NIMC, INEC, APC or bank verification service is connected. The form, privacy notice and admin page say so, and nothing is labelled as verified. Bank account name verification (e.g. Paystack account resolve) needs a provider account and key.
@@ -109,7 +110,7 @@ Required in production: `MONGODB_URI`, `JWT_SECRET` (≥ 32 random chars) and `D
 
 ## Email (Nodemailer over SMTP)
 
-All email goes through one server-side transporter in `server/src/services/email.js`, configured from `SMTP_*` environment variables and reused for every message. It sends the registration confirmation to the applicant (email is mandatory), a new-registration alert to `ADMIN_NOTIFICATION_EMAIL` (reference, agent type and polling unit only: no contact, identity or bank details), and approve/decline decision emails. There is no contact form and no password-reset email in this project.
+All email goes through one server-side transporter in `server/src/services/email.js`, configured from `SMTP_*` environment variables and reused for every message. It sends the registration confirmation to the applicant (email is mandatory), a new-registration alert to `ADMIN_NOTIFICATION_EMAIL` (reference, role and location only: no contact, identity or bank details), approve/decline decision emails, and a one-time set-password invitation for approved collation officers. There is no contact form and no self-service password reset.
 
 - `npm run email:check` validates the settings and logs in to the SMTP server without sending anything.
 - Recipients must be a single plain address: line breaks, display names or lists are refused, and subjects are flattened to one line, so user input cannot inject headers.
@@ -141,7 +142,7 @@ All email goes through one server-side transporter in `server/src/services/email
 ## Customising content
 
 - Copy, requirements, steps and FAQ: `client/src/content/site.js`. Logo: `client/public/brand/apc-logo.jpg`.
-- Optional form fields and upload limits: `shared/agentForm.js`. Agent types and the bank list: `shared/options.js`.
+- Optional form fields and upload limits: `shared/agentForm.js`. Roles, registration statuses and the bank list: `shared/options.js`. The platform name: `shared/brand.js`.
 - Official data: `pollingunit/` (states and LGAs; INEC polling units listed in `manifest.json`). Known gap: the states/LGAs file has 773 LGAs; Bida (Niger State) is missing.
 
 ## Troubleshooting

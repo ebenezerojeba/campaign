@@ -4,6 +4,7 @@ import { AnimatePresence, m } from 'framer-motion';
 import { LayoutDashboard, Users, ScrollText, UserCog, LogOut, Menu, X, Eye, ExternalLink, MapPinned, KeyRound, Landmark, FileSpreadsheet } from 'lucide-react';
 import { Logo } from '../components/brand/Logo.jsx';
 import { accountRoleLabel } from '../../../shared/options.js';
+import { PRODUCT_NAME } from '../../../shared/brand.js';
 import { Alert, Dialog, Spinner } from '../components/ui/Feedback.jsx';
 import { Button } from '../components/ui/Button.jsx';
 import { TextField } from '../components/ui/Field.jsx';
@@ -30,11 +31,11 @@ const NAV = [
   { to: '', label: 'Overview', icon: LayoutDashboard, permission: 'agents:read', end: true },
   { to: '', label: 'My dashboard', icon: LayoutDashboard, permission: 'officer:dashboard', end: true },
   { to: 'agents', label: 'Registrations', icon: Users, permission: 'agents:read' },
-  { to: 'officers', label: 'Collation officer posts', icon: Landmark, permission: 'agents:read' },
+  { to: 'officers', label: 'Collation officer positions', icon: Landmark, permission: 'agents:read' },
   { to: 'positions', label: 'Contested positions', icon: MapPinned, permission: 'agents:read' },
   { to: 'reports', label: 'Reports and downloads', icon: FileSpreadsheet, permission: 'reports:export' },
   { to: 'audit', label: 'Audit log', icon: ScrollText, permission: 'audit:read' },
-  { to: 'staff', label: 'Staff accounts', icon: UserCog, permission: 'staff:manage' },
+  { to: 'staff', label: 'Accounts', icon: UserCog, permission: 'staff:manage' },
 ];
 
 function Sidebar({ onNavigate }) {
@@ -156,7 +157,7 @@ function Shell() {
         )}
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-line bg-white/90 px-4 backdrop-blur sm:px-6 lg:px-8">
           <button type="button" onClick={() => setOpen(true)} className="rounded-md p-2 text-forest-900 hover:bg-mist lg:hidden" aria-label="Open menu" aria-expanded={open}><Menu className="size-6" aria-hidden /></button>
-          <p className="hidden text-sm text-slate-500 lg:block">Polling unit agent registration administration</p>
+          <p className="hidden text-sm text-slate-500 lg:block">APC Lagos Digital Management System</p>
           <Link to="/" target="_blank" className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold text-green-700 hover:bg-mist">View public site<ExternalLink className="size-3.5" aria-hidden /></Link>
         </header>
         <main id="admin-main" className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -255,12 +256,12 @@ function Preview() {
 
 export default function AdminApp() {
   useEffect(() => {
-    document.title = 'Administration · APC Lagos Polling Unit Agent Registration';
+    document.title = `Administration · ${PRODUCT_NAME}`;
     const meta = document.createElement('meta');
     meta.name = 'robots';
     meta.content = 'noindex, nofollow';
     document.head.appendChild(meta);
-    return () => { meta.remove(); document.title = 'APC Lagos Polling Unit Agent Registration'; };
+    return () => { meta.remove(); document.title = PRODUCT_NAME; };
   }, []);
   return (
     <Routes>

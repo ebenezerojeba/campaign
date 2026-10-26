@@ -312,7 +312,7 @@ test('reports: every type downloads as a valid Excel file and CSV, with filters 
   const header = regs.Registrations[0].join(' ');
   for (const banned of ['NIN', 'VIN', 'Account', 'Bank', 'party']) assert.ok(!header.includes(banned), `no ${banned} column`);
   const officers = await readXlsx((await admin.get('/api/admin/reports/ward-officers').buffer(true).parse(binary)).body);
-  assert.equal(officers['Ward officer posts'].length, 1 + 245);
+  assert.equal(officers['Ward positions'].length, 1 + 245);
 });
 
 test('spreadsheet formula injection is neutralised in Excel and CSV', async () => {

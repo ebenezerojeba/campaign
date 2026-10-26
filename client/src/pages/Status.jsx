@@ -12,10 +12,11 @@ import { post } from '../lib/api.js';
 import { formatDate } from '../lib/format.js';
 
 const RESULT = {
-  pending: { Icon: Hourglass, tone: 'bg-gold-50 border-gold-200', iconCls: 'text-gold-600', title: 'Your registration is being reviewed', body: 'The team is checking your details and documents. We will email you when a decision is made.' },
+  pending: { Icon: Hourglass, tone: 'bg-gold-50 border-gold-200', iconCls: 'text-gold-600', title: 'Your registration is being reviewed', body: 'The coordination team is checking your details and documents. We will email you when a decision is made.' },
   approved: { Icon: CircleCheck, tone: 'bg-green-50 border-green-100', iconCls: 'text-green-700', title: 'Your registration has been approved', body: 'The coordination team will contact you by email with your next steps.' },
-  rejected: { Icon: CircleX, tone: 'bg-danger-50 border-[#f1c9c4]', iconCls: 'text-danger-700', title: 'Your registration was not approved', body: 'If you think your details or documents were incorrect, contact the registration team with your reference.' },
-  cancelled: { Icon: CircleSlash, tone: 'bg-mist border-line', iconCls: 'text-slate-500', title: 'Your registration was cancelled', body: 'If you did not ask for this, contact the registration team with your reference.' },
+  rejected: { Icon: CircleX, tone: 'bg-danger-50 border-[#f1c9c4]', iconCls: 'text-danger-700', title: 'Your registration was not approved', body: 'If you think your details or documents were incorrect, contact the coordination team with your reference.' },
+  cancelled: { Icon: CircleSlash, tone: 'bg-mist border-line', iconCls: 'text-slate-500', title: 'Your registration was cancelled', body: 'If you did not ask for this, contact the coordination team with your reference.' },
+  revoked: { Icon: CircleSlash, tone: 'bg-mist border-line', iconCls: 'text-slate-500', title: 'Your assignment was revoked', body: 'Your registration was approved, but you no longer hold the position. Contact the coordination team with your reference if you have questions.' },
 };
 
 export default function Status() {

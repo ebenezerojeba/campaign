@@ -9,7 +9,6 @@ export const AGENT_CATEGORIES = [
   { value: 'lga_collation_officer', label: 'LGA Collation Officer' },
   { value: 'canvasser', label: 'Canvasser' },
   { value: 'mobilizer', label: 'Mobilizer' },
-  // { value: 'pu_agent', label: 'PU Agent' },
   // Kept for existing registrations and admin filters; no longer offered to applicants.
   { value: 'agent', label: 'Agent' },
 ];
@@ -94,7 +93,9 @@ export const DOCUMENT_KINDS = [
   { value: 'selfie', label: 'Selfie' },
 ];
 
-export const PRIVACY_NOTICE_VERSION = '2026-10-agents-v4';
+// Changes whenever the privacy notice wording changes, so each consent record
+// shows which version the person agreed to.
+export const PRIVACY_NOTICE_VERSION = '2026-10-v5';
 
 export const labelFor = (list, value) => list.find((o) => o.value === value)?.label ?? value;
 export const valuesOf = (list) => list.map((o) => o.value);

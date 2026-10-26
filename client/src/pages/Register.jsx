@@ -253,7 +253,7 @@ function StepIdentity({ register, errors, control }) {
   return (
     <div className="grid gap-10">
       <Alert tone="info" title="Why we ask for these details">
-        Your NIN, VIN and APC party registration number let the team confirm your identity, voter registration and party membership. Your bank details are used only to pay any allowance due to you for your role. They are stored encrypted and only authorised administrators can see them. This form checks the format of each number; it does not verify them with NIMC, INEC, APC or your bank.
+        Your NIN, VIN and APC party registration number let the coordination team confirm your identity, voter registration and party membership. Your bank details are used only to pay any allowance due to you for your role. They are stored encrypted and only authorised administrators can see them. This form checks the format of each number; it does not verify them with NIMC, INEC, APC or your bank.
       </Alert>
 
       <FieldGroup title="Identification" description="Enter each number exactly as printed on your documents.">
@@ -298,7 +298,7 @@ function StepIdentity({ register, errors, control }) {
             label="Bank name"
             placeholder="Type to search Nigerian banks"
             options={NIGERIAN_BANKS}
-            emptyText="No bank matches. Check the spelling, or contact the team if your bank is not listed."
+            emptyText="No bank matches. Check the spelling, or contact the coordination team if your bank is not listed."
             value={field.value}
             onBlur={field.onBlur}
             ref={field.ref}
@@ -396,7 +396,7 @@ function StepRole({ register, errors, control, watch, setValue }) {
 
         {lga && unconfigured && (
           <Alert tone="warning" title="Polling units for this LGA are not available yet">
-            The official ward and polling unit list for {lga} has not been added. Contact the registration team before continuing.
+            The official ward and polling unit list for {lga} has not been added. Contact the coordination team before continuing.
           </Alert>
         )}
 
@@ -457,7 +457,7 @@ function StepRole({ register, errors, control, watch, setValue }) {
             ))}
             {positionFilled && (
               <Alert tone="warning" title={`The ${labelFor(AGENT_CATEGORIES, agentCategory)} position here is already filled`}>
-                Each polling unit has one Agent 1 and one Agent 2. Check that you chose the right agent type and polling unit. If you were asked to serve here, contact the coordination team.
+                Each polling unit has one Agent 1 and one Agent 2. Check that you chose the right role and polling unit. If you were asked to serve here, contact the coordination team.
               </Alert>
             )}
           </>
@@ -488,9 +488,9 @@ function CardCheckNotice({ scan, vinCheck, confirmed, onConfirm, onEditVin }) {
   }
   if (vinCheck.result === 'match') return <Alert tone="success" title="The VIN on your card matches the one you entered" />;
   if (vinCheck.result === 'unreadable') {
-    return <Alert tone="info" title="We could not read the VIN on your card photo">That is fine: the registration team will check it. A sharp, well-lit photo of the whole card helps.</Alert>;
+    return <Alert tone="info" title="We could not read the VIN on your card photo">That is fine: the coordination team will check it. A sharp, well-lit photo of the whole card helps.</Alert>;
   }
-  if (confirmed) return <Alert tone="info" title="You confirmed your VIN">The registration team will check it against your card.</Alert>;
+  if (confirmed) return <Alert tone="info" title="You confirmed your VIN">The coordination team will check it against your card.</Alert>;
   return (
     <Alert tone="warning" title="Your VIN may not match your voter’s card" action={
       <div className="flex flex-wrap gap-2">
@@ -507,7 +507,7 @@ function StepDocuments({ files, setFile, fileErrors, setFileError, cardNotice })
   return (
     <div className="grid gap-8">
       <Alert tone="info" title="How your files are checked">
-        We check that each file really is a photo or PDF, is complete, and is clear enough to read. These checks do not prove that a voter’s card is genuine: the registration team verifies cards separately. Photos are resized and location data is removed before upload.
+        We check that each file really is a photo or PDF, is complete, and is clear enough to read. These checks do not prove that a voter’s card is genuine: the coordination team verifies cards separately. Photos are resized and location data is removed before upload.
       </Alert>
       {requiredDocuments().map((kind) => (
         <FileField
@@ -622,7 +622,7 @@ function StepReview({ values, files, errors, control, onEdit, cardNotice }) {
         )} />
         <Controller control={control} name="consentProcessing" render={({ field }) => (
           <Checkbox checked={field.value} onChange={field.onChange} error={errors.consentProcessing?.message}>
-            I agree that APC Lagos may use the information in this form to register me as a polling unit agent and contact me about it, as described in the privacy notice.
+            I agree that APC Lagos may use the information in this form to register me in the role I chose and contact me about it, as described in the privacy notice.
           </Checkbox>
         )} />
       </div>
@@ -777,7 +777,7 @@ export default function Register() {
     <div className="bg-mist pb-32 pt-8 sm:pt-12 lg:pb-20">
       <div className="container-page grid gap-8 lg:grid-cols-[1fr_320px] lg:gap-12">
         <div className="min-w-0">
-          <h1 className="type-h2 text-forest-900">Polling unit agent registration</h1>
+          <h1 className="type-h2 text-forest-900">Registration</h1>
           <p className="mt-3 text-slate-600">Step {step + 1} of {STEPS.length}. Your contact and polling unit answers are kept on this device until you submit. Identity and bank details and documents are never saved on the device, so add them in one sitting.</p>
           <div className="mt-6"><Progress step={step} maxReached={maxReached} onJump={goTo} /></div>
 

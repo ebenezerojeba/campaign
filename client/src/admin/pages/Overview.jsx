@@ -111,13 +111,13 @@ export default function Overview() {
     <>
       <PageHeader
         title={`Welcome, ${user.name.split(' ')[0]}`}
-        description="Polling unit agent registrations across Lagos State."
+        description="Registrations for all four roles across Lagos State: Agent 1, Agent 2, Ward Collation Officer and LGA Collation Officer."
         actions={data.sampleCount > 0 && <Badge tone="sample">{formatNumber(data.sampleCount)} sample records included</Badge>}
       />
 
       {totals.all === 0 ? (
         <EmptyState icon={Users} title="No registrations yet" action={<a href="/register" target="_blank" className="font-semibold text-green-700 underline underline-offset-4">Open the registration form</a>}>
-          When agents register, their registrations appear here for review.
+          When people register, their registrations appear here for review.
         </EmptyState>
       ) : (
         <div className="space-y-6">
@@ -130,7 +130,7 @@ export default function Overview() {
           </div>
 
           {data.officerPosts && (
-            <Card title="Collation officer posts" actions={<Link to={`${base}/officers`} className="text-sm font-semibold text-green-700 hover:underline">See all posts</Link>}>
+            <Card title="Collation officer positions" actions={<Link to={`${base}/officers`} className="text-sm font-semibold text-green-700 hover:underline">See all positions</Link>}>
               <div className="grid gap-4 sm:grid-cols-2">
                 {[['LGA Collation Officers', data.officerPosts.lga], ['Ward Collation Officers', data.officerPosts.ward]].map(([label, p]) => (
                   <div key={label} className="rounded-xl border border-line p-4">
@@ -176,7 +176,7 @@ export default function Overview() {
                 </details>
               )}
             </Card>
-            <Card title="Registrations by agent type">
+            <Card title="Registrations by role">
               <BarList items={data.byCategory.map((c) => ({ label: c.label, value: c.count }))} />
             </Card>
           </div>
@@ -184,7 +184,7 @@ export default function Overview() {
           <Card title="Recent registrations" actions={<Link to={`${base}/agents`} className="text-sm font-semibold text-green-700 hover:underline">View all</Link>} bodyClassName="p-0">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px]">
-                <thead className="border-b border-line bg-paper"><tr><th className={th}>Reference</th><th className={th}>Name</th><th className={th}>Agent type</th><th className={th}>LGA</th><th className={th}>Status</th><th className={th}>Registered</th></tr></thead>
+                <thead className="border-b border-line bg-paper"><tr><th className={th}>Reference</th><th className={th}>Name</th><th className={th}>Role</th><th className={th}>LGA</th><th className={th}>Status</th><th className={th}>Registered</th></tr></thead>
                 <tbody className="divide-y divide-line">
                   {data.recent.map((v) => (
                     <tr key={v._id} className="hover:bg-paper">

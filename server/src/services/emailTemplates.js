@@ -9,12 +9,13 @@
 // Only values passed through esc() reach the HTML. Messages never contain
 // NIN, VIN, party registration numbers, bank details or documents.
 import { env } from '../config/env.js';
+import { ORG_NAME, PRODUCT_NAME, PRODUCT_SHORT } from '../../../shared/brand.js';
 import { labelFor, AGENT_CATEGORIES, levelOf } from '../../../shared/options.js';
 
 export const esc = (s = '') => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const ORG = 'APC Lagos';
-const SERVICE = 'Polling Unit Agent Registration';
+const ORG = ORG_NAME;
+const SERVICE = PRODUCT_SHORT;
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 const C = {
   page: '#F3F5F4',
@@ -157,7 +158,7 @@ const locationRows = (a) => {
     ['LGA', a.lga ? `${a.lga}, Lagos State` : ''],
   ];
 };
-const applicantReason = 'You are receiving this email because this address was used to register with APC Lagos as a polling unit agent or collation officer. If you did not register, reply to this email.';
+const applicantReason = 'You are receiving this email because this address was used to register with APC Lagos as an agent or collation officer. If you did not register, reply to this email.';
 
 // ---------- Templates ----------
 
@@ -176,7 +177,7 @@ export function registrationConfirmation(a) {
         reference(a.reference),
         details(rows),
         subheading('What happens next'),
-        paragraph('The registration team will review your details, passport photograph and voter’s card. We will email you when a decision has been made. You can check your status at any time using your reference and the phone number you registered with.'),
+        paragraph('The coordination team will review your details, passport photograph and voter’s card. We will email you when a decision has been made. You can check your status at any time using your reference and the phone number you registered with.'),
         button({ href: statusUrl, label: 'Check registration status' }),
         note('APC Lagos will never ask you to send your voter’s card, NIN, bank details or passwords by email or WhatsApp.'),
       ],
@@ -191,7 +192,7 @@ Registration reference: ${a.reference}
 ${textDetails(rows)}
 
 What happens next
-The registration team will review your details, passport photograph and voter's card. We will email you when a decision has been made. You can check your status at any time using your reference and the phone number you registered with:
+The coordination team will review your details, passport photograph and voter's card. We will email you when a decision has been made. You can check your status at any time using your reference and the phone number you registered with:
 ${statusUrl}
 
 APC Lagos will never ask you to send your voter's card, NIN, bank details or passwords by email or WhatsApp.
@@ -246,21 +247,21 @@ export function adminAlert(a) {
     ...locationRows(a),
     ['Senatorial district', a.senatorialDistrict ? titleCase(a.senatorialDistrict) : ''],
   ];
-  const reason = 'You are receiving this email because this address is set to receive new-registration notifications for APC Lagos Polling Unit Agent Registration.';
+  const reason = `You are receiving this email because this address is set to receive new-registration notifications for the ${PRODUCT_NAME}.`;
   return {
     subject: `${ORG}: New Agent Registration (${a.reference})`,
     html: shell({
       preheader: `New ${agentType(a)} registration for ${a.lga} LGA.`,
       reason,
       rows: [
-        title('New agent registration'),
+        title('New registration'),
         paragraph(`A new registration (${esc(agentType(a))}) has been submitted and is awaiting review.`),
         details(rows),
         button({ href: url, label: 'Review registration' }),
         note('Contact details, identification, bank details and documents are available only in the administration dashboard after signing in.'),
       ],
     }),
-    text: `New agent registration
+    text: `New registration
 
 A new registration (${agentType(a)}) has been submitted and is awaiting review.
 
@@ -286,7 +287,7 @@ export function adminDigest({ from, to, count, byType = [], topLgas = [] }) {
     ...byType.map((t) => [labelFor(AGENT_CATEGORIES, t.type), String(t.count)]),
     ...(topLgas.length ? [['Most active LGAs', topLgas.map((l) => `${l.lga} (${l.count})`).join(', ')]] : []),
   ];
-  const reason = 'You are receiving this email because this address is set to receive registration summaries for APC Lagos Polling Unit Agent Registration.';
+  const reason = `You are receiving this email because this address is set to receive registration summaries for the ${PRODUCT_NAME}.`;
   return {
     subject: `${ORG}: Registration Summary (${count} new)`,
     html: shell({

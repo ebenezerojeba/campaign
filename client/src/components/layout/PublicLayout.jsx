@@ -114,7 +114,7 @@ function SiteHeader() {
 
 function SiteFooter() {
   const { contact } = useConfig();
-  const wa = whatsappLink(contact.whatsapp, 'Hello, I have a question about APC Lagos polling unit agent registration.');
+  const wa = whatsappLink(contact.whatsapp, 'Hello, I have a question about registering with APC Lagos.');
   const hasContact = contact.email || contact.phone || wa || contact.address;
   return (
     <footer id="contact" className="bg-forest-950 text-green-50/80">
@@ -123,7 +123,7 @@ function SiteFooter() {
         <div>
           <Logo tone="light" />
           <p className="mt-5 max-w-sm text-[15px] leading-relaxed text-green-50/70">
-            Registration for APC Lagos polling unit agents (Agent 1 and Agent 2) serving at polling units across Lagos State.
+            Registration for APC Lagos agents (Agent 1 and Agent 2) and collation officers (Ward and LGA) serving across Lagos State.
           </p>
         </div>
         <div>
@@ -145,7 +145,7 @@ function SiteFooter() {
               {contact.address && <li className="flex gap-2.5"><MapPin className="mt-1 size-4 shrink-0 text-gold-500" aria-hidden /><span>{contact.address}</span></li>}
             </ul>
           ) : (
-            <p className="mt-4 text-[15px] text-green-50/70">Contact details for the registration team will be published here. Registered agents are contacted by email.</p>
+            <p className="mt-4 text-[15px] text-green-50/70">Contact details for the coordination team will be published here. Everyone who registers is contacted by email.</p>
           )}
         </div>
       </div>

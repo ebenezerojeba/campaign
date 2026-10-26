@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { AlertTriangle, CheckCircle2, Info, XCircle, Loader2, X } from 'lucide-react';
 import { cx } from '../../lib/format.js';
 import { Button } from './Button.jsx';
+import { REGISTRATION_STATUSES } from '../../../../shared/options.js';
 
 const ALERT = {
   info: { cls: 'bg-info-50 border-[#c9d9ef] text-info-700', Icon: Info },
@@ -44,7 +45,8 @@ export function Badge({ tone = 'neutral', children, className, dot = false }) {
 }
 
 export const STATUS_TONE = { pending: 'pending', approved: 'approved', rejected: 'rejected', cancelled: 'neutral', revoked: 'rejected' };
-export const STATUS_LABEL = { pending: 'Pending', approved: 'Approved', rejected: 'Not approved', cancelled: 'Cancelled', revoked: 'Revoked' };
+// One wording for registration statuses everywhere (shared/options.js).
+export const STATUS_LABEL = Object.fromEntries(REGISTRATION_STATUSES.map((s) => [s.value, s.label]));
 
 export function StatusBadge({ status }) {
   return <Badge tone={STATUS_TONE[status]} dot>{STATUS_LABEL[status] ?? status}</Badge>;

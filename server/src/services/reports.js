@@ -22,11 +22,11 @@ export const MAX_ROWS = 30000;
 export const REPORTS = [
   { id: 'summary', title: 'Overall registration summary', description: 'Registrations by role and status, and by LGA.', filters: ['from', 'to'] },
   { id: 'registrations', title: 'Registrations list', description: 'One row per registration with contact and location details. No identity, bank or document data.', filters: ['role', 'lga', 'wardCode', 'status', 'from', 'to'] },
-  { id: 'lga-officers', title: 'LGA Collation Officer assignments', description: 'All 20 LGA posts: who holds each, its status and dashboard access.', filters: ['lga'] },
-  { id: 'ward-officers', title: 'Ward Collation Officer assignments', description: 'All 245 ward posts: who holds each, its status and dashboard access.', filters: ['lga', 'wardCode'] },
-  { id: 'vacancies', title: 'Filled and vacant positions', description: 'Officer posts, and Agent 1 / Agent 2 positions at every polling unit.', filters: ['lga', 'wardCode'] },
+  { id: 'lga-officers', title: 'LGA Collation Officer assignments', description: 'All 20 LGA Collation Officer positions: who fills each, the registration status and dashboard access.', filters: ['lga'] },
+  { id: 'ward-officers', title: 'Ward Collation Officer assignments', description: 'All 245 Ward Collation Officer positions: who fills each, the registration status and dashboard access.', filters: ['lga', 'wardCode'] },
+  { id: 'vacancies', title: 'Filled and vacant positions', description: 'Collation officer positions, and Agent 1 and Agent 2 positions at every polling unit.', filters: ['lga', 'wardCode'] },
   { id: 'status', title: 'Registration status report', description: 'Counts by status for each role in each LGA.', filters: ['role', 'from', 'to'] },
-  { id: 'lga-ward', title: 'LGA and ward summary', description: 'Per ward: polling units, agent positions filled and vacant, and the ward officer post.', filters: ['lga'] },
+  { id: 'lga-ward', title: 'LGA and ward summary', description: 'Per ward: polling units, Agent 1 and Agent 2 positions filled and vacant, and the Ward Collation Officer position.', filters: ['lga'] },
   { id: 'conflicts', title: 'Assignment conflict report', description: 'Positions with more than one active registration, for review. Nothing is changed automatically.', filters: ['role', 'lga'] },
 ];
 export const reportById = (id) => REPORTS.find((r) => r.id === id);
@@ -80,7 +80,7 @@ function writerFor(res, format) {
     };
   }
   const wb = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: true, useSharedStrings: false });
-  wb.creator = 'APC Lagos registration';
+  wb.creator = 'APC Lagos Digital Management System';
   wb.created = new Date();
   return {
     async begin(meta) {
@@ -206,7 +206,7 @@ const builders = {
     return {
       count: posts.length,
       async run(w) {
-        const s = w.sheet('LGA officer posts', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Status', key: 'status', width: 14 }, { header: 'Reference', key: 'reference', width: 16 }, { header: 'Officer', key: 'name', width: 28 }, { header: 'Active registrations for this post', key: 'competing', width: 18 }, { header: 'Conflict', key: 'contested', width: 10 }, { header: 'Dashboard access', key: 'dashboard', width: 22 }]);
+        const s = w.sheet('LGA positions', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Status', key: 'status', width: 14 }, { header: 'Reference', key: 'reference', width: 16 }, { header: 'Name', key: 'name', width: 28 }, { header: 'Active registrations for this position', key: 'competing', width: 18 }, { header: 'Conflict', key: 'contested', width: 10 }, { header: 'Dashboard access', key: 'dashboard', width: 22 }]);
         for (const p of posts) s.add({ lga: p.lga, status: statusLabel(p.status), reference: p.holder?.reference, name: p.holder?.name, competing: p.competing, contested: yesNo(p.contested), dashboard: accessText(p.dashboard) });
         s.end();
       },
@@ -218,7 +218,7 @@ const builders = {
     return {
       count: posts.length,
       async run(w) {
-        const s = w.sheet('Ward officer posts', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Ward', key: 'ward', width: 26 }, { header: 'Ward code', key: 'wardCode', width: 11 }, { header: 'Status', key: 'status', width: 14 }, { header: 'Reference', key: 'reference', width: 16 }, { header: 'Officer', key: 'name', width: 28 }, { header: 'Active registrations for this post', key: 'competing', width: 18 }, { header: 'Conflict', key: 'contested', width: 10 }, { header: 'Dashboard access', key: 'dashboard', width: 22 }]);
+        const s = w.sheet('Ward positions', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Ward', key: 'ward', width: 26 }, { header: 'Ward code', key: 'wardCode', width: 11 }, { header: 'Status', key: 'status', width: 14 }, { header: 'Reference', key: 'reference', width: 16 }, { header: 'Name', key: 'name', width: 28 }, { header: 'Active registrations for this position', key: 'competing', width: 18 }, { header: 'Conflict', key: 'contested', width: 10 }, { header: 'Dashboard access', key: 'dashboard', width: 22 }]);
         for (const p of posts) s.add({ lga: p.lga, ward: p.ward, wardCode: p.wardCode, status: statusLabel(p.status), reference: p.holder?.reference, name: p.holder?.name, competing: p.competing, contested: yesNo(p.contested), dashboard: accessText(p.dashboard) });
         s.end();
       },
@@ -242,7 +242,7 @@ const builders = {
     return {
       count: officerRows.length + units.length,
       async run(w) {
-        const a = w.sheet('Officer posts', [{ header: 'Role', key: 'role', width: 24 }, { header: 'LGA', key: 'lga', width: 20 }, { header: 'Ward', key: 'ward', width: 26 }, { header: 'Ward code', key: 'wardCode', width: 11 }, { header: 'Status', key: 'status', width: 14 }]);
+        const a = w.sheet('Collation officer positions', [{ header: 'Role', key: 'role', width: 24 }, { header: 'LGA', key: 'lga', width: 20 }, { header: 'Ward', key: 'ward', width: 26 }, { header: 'Ward code', key: 'wardCode', width: 11 }, { header: 'Status', key: 'status', width: 14 }]);
         for (const p of officerRows) a.add({ role: role(p.agentCategory), lga: p.lga, ward: p.ward, wardCode: p.wardCode, status: statusLabel(p.status) });
         a.end();
         const b = w.sheet('Polling-unit agents', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Ward', key: 'ward', width: 26 }, { header: 'Ward code', key: 'wardCode', width: 11 }, { header: 'Polling unit code', key: 'code', width: 16 }, { header: 'Polling unit', key: 'name', width: 40 }, { header: 'Agent 1', key: 'a1', width: 22 }, { header: 'Agent 2', key: 'a2', width: 22 }]);
@@ -280,13 +280,13 @@ const builders = {
     const lgaPost = new Map(posts.lga.posts.map((p) => [p.lga, p.status]));
     const wardRows = dashboards.flatMap((d) => d.wards.map((wd) => ({ lga: d.assignment.lga, ...wd, wardOfficer: statusLabel(wd.wardOfficer.status) })));
     const lgaRows = dashboards.map((d) => ({ lga: d.assignment.lga, ...d.totals, lgaOfficer: statusLabel(lgaPost.get(d.assignment.lga) ?? 'vacant') }));
-    const cols = [{ header: 'Polling units', key: 'pollingUnits' }, { header: 'Agent positions', key: 'agentPositions' }, { header: 'Filled', key: 'filled' }, { header: 'Approved', key: 'approved' }, { header: 'Vacant', key: 'vacant' }];
+    const cols = [{ header: 'Polling units', key: 'pollingUnits' }, { header: 'Agent 1 and Agent 2 positions', key: 'agentPositions' }, { header: 'Filled', key: 'filled' }, { header: 'Approved', key: 'approved' }, { header: 'Vacant', key: 'vacant' }];
     return {
       count: lgaRows.length + wardRows.length,
       async run(w) {
-        const a = w.sheet('LGAs', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Wards', key: 'wards' }, ...cols, { header: 'Ward officer posts filled', key: 'wardOfficersFilled', width: 22 }, { header: 'LGA officer post', key: 'lgaOfficer', width: 16 }]);
+        const a = w.sheet('LGAs', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Wards', key: 'wards' }, ...cols, { header: 'Ward Collation Officer positions filled', key: 'wardOfficersFilled', width: 22 }, { header: 'LGA Collation Officer position', key: 'lgaOfficer', width: 16 }]);
         lgaRows.forEach((r) => a.add(r)); a.end();
-        const b = w.sheet('Wards', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Ward', key: 'name', width: 26 }, { header: 'Ward code', key: 'code', width: 11 }, ...cols, { header: 'Ward officer post', key: 'wardOfficer', width: 16 }]);
+        const b = w.sheet('Wards', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Ward', key: 'name', width: 26 }, { header: 'Ward code', key: 'code', width: 11 }, ...cols, { header: 'Ward Collation Officer position', key: 'wardOfficer', width: 16 }]);
         wardRows.forEach((r) => b.add(r)); b.end();
       },
     };
@@ -362,7 +362,7 @@ export async function streamOfficerReport(res, assignment, format, user) {
   const w = writerFor(res, format);
   await w.begin(meta);
   if (assignment.level === 'lga') {
-    const s = w.sheet('Wards', [{ header: 'Ward', key: 'name', width: 26 }, { header: 'Ward code', key: 'code', width: 11 }, { header: 'Polling units', key: 'pollingUnits' }, { header: 'Agent positions', key: 'agentPositions' }, { header: 'Filled', key: 'filled' }, { header: 'Approved', key: 'approved' }, { header: 'Vacant', key: 'vacant' }, { header: 'Ward officer post', key: 'wardOfficer', width: 16 }]);
+    const s = w.sheet('Wards', [{ header: 'Ward', key: 'name', width: 26 }, { header: 'Ward code', key: 'code', width: 11 }, { header: 'Polling units', key: 'pollingUnits' }, { header: 'Agent 1 and Agent 2 positions', key: 'agentPositions' }, { header: 'Filled', key: 'filled' }, { header: 'Approved', key: 'approved' }, { header: 'Vacant', key: 'vacant' }, { header: 'Ward Collation Officer position', key: 'wardOfficer', width: 16 }]);
     for (const r of rows) s.add({ ...r, wardOfficer: statusLabel(r.wardOfficer.status) });
     s.end();
   } else {

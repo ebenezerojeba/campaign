@@ -83,7 +83,7 @@ export function parseRegistrationData(req, _res, next) {
 
 // One message for every kind of duplicate (phone, email, NIN, VIN), so the
 // response never reveals which identifier belongs to an existing registration.
-const DUPLICATE_MESSAGE = 'Some of these details are already used by an existing registration. If you have registered before, check your registration status. Otherwise, contact the registration team.';
+const DUPLICATE_MESSAGE = 'Some of these details are already used by an existing registration. If you have registered before, check your registration status. Otherwise, contact the coordination team.';
 const CAPTCHA_MESSAGE = 'Complete the security check and try again.';
 const POSITION_PLACE = { pollingUnit: 'at this polling unit', ward: 'for this ward', lga: 'for this LGA' };
 const positionTakenMessage = (category, reason) => (reason === 'capacity'

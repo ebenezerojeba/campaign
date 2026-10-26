@@ -11,8 +11,8 @@ import { formatDateTime } from '../../lib/format.js';
 import { accountRoleLabel } from '../../../../shared/options.js';
 
 const ROLES = [
-  { value: 'reviewer', label: 'Reviewer: view and decide on applications' },
-  { value: 'admin', label: 'Administrator: full access, exports and staff management' },
+  { value: 'reviewer', label: 'Reviewer: review registrations and decide on them' },
+  { value: 'admin', label: 'Administrator: full access, including reports, exports and accounts' },
 ];
 
 function CreateStaff({ onClose, onCreated }) {
@@ -68,7 +68,7 @@ export default function Staff() {
 
   return (
     <>
-      <PageHeader title="Staff accounts" description="There is no public sign-up. Only administrators can add staff." actions={<Button icon={UserPlus} onClick={() => setCreating(true)}>Add staff</Button>} />
+      <PageHeader title="Accounts" description="Sign-in accounts for staff and collation officers. Add staff accounts here; a collation officer account is created from their approved registration. There is no public sign-up." actions={<Button icon={UserPlus} onClick={() => setCreating(true)}>Add staff</Button>} />
       <div className="rounded-[var(--radius-lg)] border border-line bg-white">
         {error ? <div className="p-4"><ErrorState error={error} onRetry={reload} /></div> : loading ? <div className="p-4"><Skeleton className="h-40" /></div> : (
           <div className="overflow-x-auto">

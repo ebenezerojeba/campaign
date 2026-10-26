@@ -282,7 +282,7 @@ function OfficerAccess({ agent, onChange }) {
   return (
     <Card title="Collation officer dashboard" description={`Gives ${agent.firstName} a sign-in for figures about their own ${levelOf(agent.agentCategory) === 'lga' ? 'LGA' : 'ward'} only: no personal details of applicants.`}>
       <p className="flex items-center gap-2 text-[15px] text-ink"><Landmark className="size-4 text-slate-400" aria-hidden />{state}</p>
-      {!ready && <p className="mt-2 text-sm text-slate-500">Available once the registration is approved and holds its post.</p>}
+      {!ready && <p className="mt-2 text-sm text-slate-500">Available once the registration is approved and holds its position.</p>}
       {error && <Alert tone="error" className="mt-3">{error}</Alert>}
       {allowed && ready && (
         <div className="mt-4 flex flex-wrap gap-2">
@@ -469,7 +469,7 @@ export default function AgentDetail() {
         <div className="space-y-6">
           <Card title="Registration" bodyClassName="py-2">
             <dl className="divide-y divide-line">
-              <Row label="Agent type">{labelFor(AGENT_CATEGORIES, a.agentCategory)}</Row>
+              <Row label="Role">{labelFor(AGENT_CATEGORIES, a.agentCategory)}</Row>
               <Row label="Email"><a href={`mailto:${a.email}`} className="inline-flex items-center gap-1.5 hover:underline"><Mail className="size-4 text-slate-400" aria-hidden />{a.email}</a></Row>
               <Row label="Phone">
                 <span className="flex flex-wrap items-center gap-3">

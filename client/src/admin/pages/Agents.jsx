@@ -61,7 +61,7 @@ export default function Agents() {
     <>
       <PageHeader
         title="Registrations"
-        description="Search, filter and review polling unit agent registrations."
+        description="Search, filter and review registrations for all four roles."
         actions={can(user, 'agents:export') && (
           demo
             ? <span className={buttonClass({ variant: 'secondary', className: 'opacity-55' })} aria-disabled="true"><Download className="size-4" aria-hidden />Export CSV</span>
@@ -96,9 +96,9 @@ export default function Agents() {
               <option value="">All statuses</option>
               {REGISTRATION_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
-            <label className="sr-only" htmlFor="f-category">Agent type</label>
+            <label className="sr-only" htmlFor="f-category">Role</label>
             <select id="f-category" className={selectCls} value={params.get('agentCategory') ?? ''} onChange={(e) => update({ agentCategory: e.target.value })}>
-              <option value="">All agent types</option>
+              <option value="">All roles</option>
               {AGENT_CATEGORIES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
             </select>
             <label className="sr-only" htmlFor="f-lga">LGA</label>
@@ -164,16 +164,16 @@ export default function Agents() {
         ) : data.length === 0 ? (
           <div className="p-4">
             <EmptyState icon={Users} title={active ? 'No registrations match these filters' : 'No registrations yet'}>
-              {active ? 'Try removing a filter or searching for something else.' : 'Registrations will appear here as agents register.'}
+              {active ? 'Try removing a filter or searching for something else.' : 'Registrations will appear here as people register.'}
             </EmptyState>
           </div>
         ) : (
           <div className={cx('overflow-x-auto transition-opacity', loading && 'opacity-60')} aria-busy={loading}>
             <table className="w-full min-w-[1080px]">
-              <caption className="sr-only">Polling unit agent registrations</caption>
+              <caption className="sr-only">Registrations</caption>
               <thead className="border-b border-line bg-paper">
                 <tr>
-                  <th scope="col" className={th}>Reference</th><th scope="col" className={th}>Name</th><th scope="col" className={th}>Agent type</th>
+                  <th scope="col" className={th}>Reference</th><th scope="col" className={th}>Name</th><th scope="col" className={th}>Role</th>
                   <th scope="col" className={th}>Phone</th><th scope="col" className={th}>LGA</th><th scope="col" className={th}>Ward</th>
                   <th scope="col" className={th}>Polling unit</th>{showBank && <th scope="col" className={th}>Bank account</th>}<th scope="col" className={th}>Status</th><th scope="col" className={th}>Registered</th>
                 </tr>
