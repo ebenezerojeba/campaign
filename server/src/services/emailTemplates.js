@@ -148,7 +148,8 @@ const pollingUnit = (a) => (a.pollingUnit ? `${a.pollingUnit} (${a.pollingUnitCo
 const ward = (a) => (a.ward ? `${a.ward}${a.wardCode ? ` (${a.wardCode})` : ''}` : 'Not recorded');
 const titleCase = (s = '') => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 // "a polling unit agent", "a ward collation officer" or "an LGA collation officer".
-const roleNoun = (a) => ({ ward: 'a ward collation officer', lga: 'an LGA collation officer' }[levelOf(a.agentCategory)] ?? 'a polling unit agent');
+// The role exactly as named everywhere else: "Agent 1", "a Ward Collation Officer", "an LGA Collation Officer".
+const roleNoun = (a) => ({ ward: 'a Ward Collation Officer', lga: 'an LGA Collation Officer' }[levelOf(a.agentCategory)] ?? agentType(a));
 // Location rows for the role: LGA officers have no ward or polling unit.
 const locationRows = (a) => {
   const level = levelOf(a.agentCategory);
@@ -202,32 +203,51 @@ ${textFooter(applicantReason)}`,
 }
 
 export function decision(a) {
-  const approved = a.status === 'approved';
-  const heading = approved ? 'Registration approved' : 'Registration not approved';
+  const kind = a.status === 'approved' ? 'approved' : a.status === 'revoked' ? 'revoked' : 'rejected';
   const rows = [['Role', agentType(a)], ...locationRows(a)];
-  const bodyHtml = approved
-    ? [paragraph(`Your registration as ${roleNoun(a)} has been approved.`), reference(a.reference), details(rows), paragraph('The coordination team will contact you with your next steps.')]
-    : [paragraph('Thank you for registering. After review, we are unable to approve your registration at this time.'), reference(a.reference), paragraph('If you believe any of your details or documents were incorrect, reply to this email and the team will look into it.')];
-  const bodyText = approved
-    ? `Your registration as ${roleNoun(a)} has been approved.
+  const officer = levelOf(a.agentCategory) !== 'pollingUnit';
+  const copy = {
+    approved: {
+      heading: 'Registration approved',
+      subject: 'Registration Approved',
+      preheader: `Your registration ${a.reference} has been approved.`,
+      lines: [
+        `Your registration as ${roleNoun(a)} has been approved.`,
+        officer
+          ? 'You will also receive a separate email with a link to set up your collation officer dashboard. The coordination team will contact you with your next steps.'
+          : 'The coordination team will contact you with your next steps.',
+      ],
+      showRows: true,
+    },
+    rejected: {
+      heading: 'Registration not approved',
+      subject: 'Registration Update',
+      preheader: `An update on your registration ${a.reference}.`,
+      lines: ['Thank you for registering. After review, we are unable to approve your registration at this time.', 'If you believe any of your details or documents were incorrect, reply to this email and the coordination team will look into it.'],
+      showRows: false,
+    },
+    revoked: {
+      heading: 'Assignment revoked',
+      subject: 'Assignment Update',
+      preheader: `An update on your assignment ${a.reference}.`,
+      lines: [
+        `Your assignment as ${roleNoun(a)} has been revoked, and you no longer hold this position.${officer ? ' Your collation officer dashboard access has ended.' : ''}`,
+        'If you have questions, reply to this email and the coordination team will respond.',
+      ],
+      showRows: true,
+    },
+  }[kind];
+  const bodyHtml = [paragraph(esc(copy.lines[0])), reference(a.reference), ...(copy.showRows ? [details(rows)] : []), paragraph(esc(copy.lines[1]))];
+  const bodyText = `${copy.lines[0]}
 
 Registration reference: ${a.reference}
-${textDetails(rows)}
-
-The coordination team will contact you with your next steps.`
-    : `Thank you for registering. After review, we are unable to approve your registration at this time.
-
-Registration reference: ${a.reference}
-
-If you believe any of your details or documents were incorrect, reply to this email and the team will look into it.`;
+${copy.showRows ? `${textDetails(rows)}
+` : ''}
+${copy.lines[1]}`;
   return {
-    subject: `${ORG}: ${approved ? 'Registration Approved' : 'Registration Update'} (${a.reference})`,
-    html: shell({
-      preheader: approved ? `Your registration ${a.reference} has been approved.` : `An update on your registration ${a.reference}.`,
-      reason: applicantReason,
-      rows: [title(heading), greeting(a.firstName), ...bodyHtml],
-    }),
-    text: `${heading}
+    subject: `${ORG}: ${copy.subject} (${a.reference})`,
+    html: shell({ preheader: copy.preheader, reason: applicantReason, rows: [title(copy.heading), greeting(a.firstName), ...bodyHtml] }),
+    text: `${copy.heading}
 
 Dear ${a.firstName},
 

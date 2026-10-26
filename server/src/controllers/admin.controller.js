@@ -384,9 +384,24 @@ export async function updateAgentStatus(req, res) {
   }
   await audit(req, { action: 'agent.status_changed', targetType: 'Agent', targetId: a._id, summary: `${a.reference}: ${from} → ${status}`, meta: { from, to: status, reason } });
 
+  // Approving a collation officer also gives them dashboard access and emails
+  // a set-password link. A problem here never undoes the approval.
+  let officerAccess = null;
+  if (status === 'approved' && isOfficer(a.agentCategory) && !a.isSample) {
+    try {
+      const granted = await grantOfficerAccess(a._id);
+      await queueOfficerInvite(granted.user);
+      officerAccess = { status: 'granted' };
+      await audit(req, { action: 'officer.access_granted', targetType: 'Agent', targetId: a._id, summary: `Dashboard access given on approval; set-password email queued` });
+    } catch (err) {
+      officerAccess = { status: 'failed', error: err instanceof AccessProblem ? err.message : 'Dashboard access could not be given. Use “Give dashboard access” on this page.' };
+      if (!(err instanceof AccessProblem)) console.error('[officer] auto access failed', err?.name);
+    }
+  }
+
   let notification = null;
-  // Decision emails are for approvals and declines only; cancelling sends nothing.
-  if (notify && ['approved', 'rejected'].includes(status) && !a.isSample) {
+  // Emails go out for approvals, declines and revoked assignments; cancelling sends nothing.
+  if (notify && ['approved', 'rejected', 'revoked'].includes(status) && !a.isSample) {
     try {
       await queueDecisionEmail(a);
       kickOutbox({ max: 1, minIntervalMs: 0 });
@@ -396,7 +411,8 @@ export async function updateAgentStatus(req, res) {
       notification = { type: 'decision', status: 'failed', error: 'The decision email could not be queued.', at: new Date() };
     }
   }
-  send(res, { status: a.status, statusHistory: a.statusHistory, reviewedAt: a.reviewedAt, notification });
+  if (officerAccess || notification) kickOutbox({ max: 2, minIntervalMs: 0 });
+  send(res, { status: a.status, statusHistory: a.statusHistory, reviewedAt: a.reviewedAt, notification, officerAccess });
 }
 
 export async function addAgentNote(req, res) {

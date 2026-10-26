@@ -18,7 +18,7 @@ const ACTIONS = {
   approved: { label: 'Approve registration', verb: 'Approve', icon: CircleCheck, variant: 'primary', body: 'Confirm that you have checked the passport photograph and voter’s card against the details given.' },
   rejected: { label: 'Decline registration', verb: 'Decline', icon: CircleX, variant: 'danger', body: 'The applicant will be told their registration was not approved at this time.' },
   pending: { label: 'Return to pending', verb: 'Return to pending', icon: RotateCcw, variant: 'secondary', body: 'The registration goes back into the review queue. It needs the polling-unit position to be free. No message is sent.' },
-  revoked: { label: 'Revoke assignment', verb: 'Revoke', icon: Ban, variant: 'danger', body: 'Use this when an approved agent or officer should no longer serve. The position is released and any collation officer dashboard access stops at once. No message is sent.' },
+  revoked: { label: 'Revoke assignment', verb: 'Revoke', icon: Ban, variant: 'danger', body: 'Use this when an approved agent or collation officer should no longer serve. The position is released and any collation officer dashboard access stops at once.' },
   cancelled: { label: 'Cancel registration', verb: 'Cancel registration', icon: CircleSlash, variant: 'secondary', body: 'Use this when the applicant withdraws or was registered by mistake. The polling-unit position is released for someone else. No message is sent.' },
 };
 
@@ -57,7 +57,7 @@ function StatusDialog({ target, agent, onClose, onDone }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const action = ACTIONS[target];
-  const canEmail = !agent.isSample && ['approved', 'rejected'].includes(target);
+  const canEmail = !agent.isSample && ['approved', 'rejected', 'revoked'].includes(target);
 
   const confirm = async () => {
     setBusy(true);
@@ -65,7 +65,9 @@ function StatusDialog({ target, agent, onClose, onDone }) {
     try {
       const result = await api.patch(`/agents/${agent._id}/status`, { status: target, reason, notify: canEmail && send });
       notify(`${agent.reference} marked ${STATUS_LABEL[target].toLowerCase()}`);
-      if (result.notification?.status === 'failed') notify('The decision email could not be sent. The status change was saved.', 'error');
+      if (result.notification?.status === 'failed') notify('The email could not be queued. The status change was saved.', 'error');
+      if (result.officerAccess?.status === 'granted') notify('Dashboard access given; a set-password email is on its way');
+      if (result.officerAccess?.status === 'failed') notify(result.officerAccess.error, 'error');
       onDone(result);
     } catch (err) {
       setError(err.fields?.reason ?? err.message);
@@ -86,8 +88,9 @@ function StatusDialog({ target, agent, onClose, onDone }) {
       <div className="mt-4 grid gap-4">
         {unchecked && <Alert tone="warning">Run the voter’s card and face check on this page before approving.</Alert>}
         {flagged && <Alert tone="warning">The card or face check raised a flag. Say why you are approving anyway.</Alert>}
+        {target === 'approved' && isOfficer(agent.agentCategory) && !agent.isSample && <Alert tone="info">Approving also gives {agent.firstName} access to the collation officer dashboard for their {levelOf(agent.agentCategory) === 'lga' ? 'LGA' : 'ward'}, and emails a link to set a password.</Alert>}
         <TextArea label="Reason" optional={!flagged} rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} hint="Recorded in the status history. Not shown to the applicant." />
-        {canEmail && <Checkbox checked={send} onChange={setSend}>Email the decision to {agent.email}</Checkbox>}
+        {canEmail && <Checkbox checked={send} onChange={setSend}>{target === 'revoked' ? 'Tell' : 'Email the decision to'} {agent.email}{target === 'revoked' ? ' by email that the assignment is revoked' : ''}</Checkbox>}
         {agent.isSample && canEmail && <p className="text-sm text-slate-500">Sample records never receive messages.</p>}
         {error && <Alert tone="error">{error}</Alert>}
       </div>
@@ -543,7 +546,8 @@ export default function AgentDetail() {
           target={target}
           agent={a}
           onClose={() => setTarget(null)}
-          onDone={(result) => { setTarget(null); setData((d) => ({ ...d, ...result, notifications: result.notification ? [...d.notifications, result.notification] : d.notifications })); }}
+          // Reload: a status change can also change the position, dashboard access and email history.
+          onDone={() => { setTarget(null); reload(); }}
         />
       )}
       {deleting && <DeleteDialog agent={a} onClose={() => setDeleting(false)} />}

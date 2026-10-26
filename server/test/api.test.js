@@ -192,15 +192,16 @@ describe('agent registration', () => {
     assert.equal(young.success, true, 'no invented minimum age');
   });
 
-  test('offers only Agent 1 and Agent 2 as agent types', async () => {
-    const legacyAgent = await submit({ ...valid, phone: '08091110009', email: 'a9@example.com', agentCategory: 'agent' });
-    assert.equal(legacyAgent.status, 422);
-    assert.ok(fieldsOf(legacyAgent).agentCategory);
-
-    for (const category of ['agent_1', 'agent_2']) {
-      assert.equal(roleSchema.safeParse({ agentCategory: category, state: 'Lagos', lga: 'Surulere' }).success, true);
+  test('offers exactly the four roles; removed roles are refused', async () => {
+    for (const removed of ['agent', 'canvasser', 'mobilizer']) {
+      const res = await submit({ ...valid, phone: '08091110009', email: 'a9@example.com', agentCategory: removed });
+      assert.equal(res.status, 422, removed);
+      assert.ok(fieldsOf(res).agentCategory, removed);
+      assert.equal(roleSchema.safeParse({ agentCategory: removed, state: 'Lagos', lga: 'Surulere' }).success, false, removed);
     }
-    assert.equal(roleSchema.safeParse({ agentCategory: 'agent', state: 'Lagos', lga: 'Surulere' }).success, false);
+    for (const category of ['agent_1', 'agent_2', 'ward_collation_officer', 'lga_collation_officer']) {
+      assert.equal(roleSchema.safeParse({ agentCategory: category, state: 'Lagos', lga: 'Surulere' }).success, true, category);
+    }
   });
 
   test('rejects an LGA of origin from a different state', async () => {
@@ -343,7 +344,7 @@ describe('administration', () => {
     assert.equal(await count('q=Ngozi'), 2);
     assert.equal(await count('q=a8@example.com'), 1);
     assert.equal(await count('agentCategory=agent_1'), 2);
-    assert.equal(await count('agentCategory=canvasser'), 0);
+    assert.equal((await admin.get('/api/admin/agents?agentCategory=canvasser')).status, 422, 'removed roles are not valid filters');
     assert.equal(await count('lga=Surulere&wardCode=20-01&pollingUnitCode=24-20-01-001'), 2);
     assert.equal(await count('senatorialDistrict=LAGOS%20CENTRAL'), 2);
     assert.equal(await count('stateOfOrigin=Anambra&lgaOfOrigin=Onitsha%20North'), 2);

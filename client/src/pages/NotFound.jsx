@@ -9,7 +9,7 @@ export default function NotFound() {
         <p className="type-lead mt-4 max-w-lg text-slate-600">The link may be out of date. You can register, check an application or return to the home page.</p>
         <div className="mt-8 flex flex-wrap gap-3">
           <ButtonLink to="/">Go to the home page</ButtonLink>
-          <ButtonLink to="/register" variant="secondary">Register as an agent</ButtonLink>
+          <ButtonLink to="/register" variant="secondary">Register</ButtonLink>
         </div>
       </div>
       <div className="hidden grid-cols-2 gap-2 md:grid" aria-hidden>

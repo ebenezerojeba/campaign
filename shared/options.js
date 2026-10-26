@@ -1,21 +1,18 @@
 // Option lists shared by the registration form, the API validators and the admin filters.
 // Values are stable identifiers stored in the database; labels are display text.
 
-// Chosen by the applicant. Never assigned automatically.
+// The four roles. Chosen by the applicant; never assigned automatically.
+// (Canvasser, Mobilizer and the old unnumbered "Agent" were removed on
+// 26 Oct 2026: no registration used them.)
 export const AGENT_CATEGORIES = [
   { value: 'agent_1', label: 'Agent 1' },
   { value: 'agent_2', label: 'Agent 2' },
   { value: 'ward_collation_officer', label: 'Ward Collation Officer' },
   { value: 'lga_collation_officer', label: 'LGA Collation Officer' },
-  { value: 'canvasser', label: 'Canvasser' },
-  { value: 'mobilizer', label: 'Mobilizer' },
-  // Kept for existing registrations and admin filters; no longer offered to applicants.
-  { value: 'agent', label: 'Agent' },
 ];
 
-// The roles offered on the form. Older values above stay valid for
-// registrations made before the change.
-export const REGISTRATION_CATEGORIES = AGENT_CATEGORIES.filter(({ value }) => ['agent_1', 'agent_2', 'ward_collation_officer', 'lga_collation_officer'].includes(value));
+// The roles offered on the form: all four.
+export const REGISTRATION_CATEGORIES = AGENT_CATEGORIES;
 
 // Where each role serves: a polling unit (agents), a ward or a whole LGA.
 // Decides which location fields are required and which position is claimed.

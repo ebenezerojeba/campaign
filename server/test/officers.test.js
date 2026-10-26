@@ -78,9 +78,8 @@ async function approve(admin, id) {
   assert.equal(res.status, 200, JSON.stringify(res.body));
 }
 // Gives an approved officer access, sends the invite, and sets their password. Returns a signed-in session.
-async function officerSession(admin, agentId, email) {
-  const grant = await admin.post(`/api/admin/agents/${agentId}/officer-access`).set(fetchHeader);
-  assert.equal(grant.status, 200, JSON.stringify(grant.body));
+// Approval gives access automatically (see approve()); this sends the queued invitation.
+async function officerSession(_admin, _agentId, email) {
   sent.length = 0;
   await outbox.drainOutbox({ max: 50, now: () => new Date(Date.now() + 60e3) });
   const invite = sent.find((m) => m.to === email && /collation officer dashboard/.test(m.subject));
@@ -363,4 +362,46 @@ test('admin dashboard shows filled and vacant officer posts', async () => {
   const d = (await admin.get('/api/admin/dashboard')).body.data;
   assert.deepEqual([d.officerPosts.lga.capacity, d.officerPosts.lga.filled, d.officerPosts.lga.vacant, d.officerPosts.lga.reconciled], [20, 1, 19, true]);
   assert.deepEqual([d.officerPosts.ward.capacity, d.officerPosts.ward.filled, d.officerPosts.ward.vacant], [245, 1, 244]);
+});
+
+test('approving an officer gives dashboard access and sends one invitation; a problem never undoes the approval', async () => {
+  const res = await register(registration({ agentCategory: 'ward_collation_officer', wardCode: '20-11' }));
+  const a = await agentFor(res);
+  await admin.post(`/api/admin/agents/${a._id}/checks`).set(fetchHeader).send({ cardReadable: false, face: { distance: 0.3 } });
+  const approved = await admin.patch(`/api/admin/agents/${a._id}/status`).set(fetchHeader).send({ status: 'approved', notify: false });
+  assert.equal(approved.status, 200);
+  assert.equal(approved.body.data.officerAccess.status, 'granted');
+  const user = await User.findOne({ 'assignment.agent': a._id }).lean();
+  assert.deepEqual([user.role, user.assignment.wardCode, user.active], ['ward_officer', '20-11', true]);
+  assert.equal(await EmailOutbox.countDocuments({ type: 'officer_invite', user: user._id }), 1);
+
+  // An email address already used by a staff account: approval still succeeds, with a clear message.
+  const clash = await register(registration({ agentCategory: 'ward_collation_officer', wardCode: '20-12', email: 'rev@test.org' }));
+  const c = await agentFor(clash);
+  await admin.post(`/api/admin/agents/${c._id}/checks`).set(fetchHeader).send({ cardReadable: false, face: { distance: 0.3 } });
+  const second = await admin.patch(`/api/admin/agents/${c._id}/status`).set(fetchHeader).send({ status: 'approved', notify: false });
+  assert.equal(second.status, 200);
+  assert.equal((await Agent.findById(c._id)).status, 'approved');
+  assert.equal(second.body.data.officerAccess.status, 'failed');
+  assert.match(second.body.data.officerAccess.error, /Another account already uses this email address/);
+  assert.equal((await User.findOne({ email: 'rev@test.org' })).role, 'reviewer', 'the staff account is untouched');
+});
+
+test('revoking an assignment emails the person; cancelling does not', async () => {
+  const res = await register(registration({ agentCategory: 'agent_1', wardCode: '20-03', pollingUnitCode: '24-20-03-001' }));
+  const a = await agentFor(res);
+  await approve(admin, a._id);
+  sent.length = 0;
+  assert.equal((await admin.patch(`/api/admin/agents/${a._id}/status`).set(fetchHeader).send({ status: 'revoked', notify: true })).status, 200);
+  await outbox.drainOutbox({ max: 20, now: () => new Date(Date.now() + 60e3) });
+  const mail = sent.find((m) => m.to === a.email && /Assignment/.test(m.subject));
+  assert.ok(mail, 'revocation email sent');
+  assert.match(mail.subject, /Assignment Update/);
+  assert.match(mail.text, /Your assignment as Agent 1 has been revoked/);
+
+  const other = await agentFor(await register(registration({ agentCategory: 'agent_2', wardCode: '20-03', pollingUnitCode: '24-20-03-002' })));
+  sent.length = 0;
+  assert.equal((await admin.patch(`/api/admin/agents/${other._id}/status`).set(fetchHeader).send({ status: 'cancelled', notify: true })).status, 200);
+  await outbox.drainOutbox({ max: 20, now: () => new Date(Date.now() + 60e3) });
+  assert.equal(sent.filter((m) => m.to === other.email && /Update/.test(m.subject)).length, 0, 'no email for a cancellation');
 });

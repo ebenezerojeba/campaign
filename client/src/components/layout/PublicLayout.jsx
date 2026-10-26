@@ -71,7 +71,7 @@ function SiteHeader() {
           </ul>
         </nav>
         <div className="flex items-center gap-2">
-          <span className="hidden sm:block"><ButtonLink to="/register" variant={overHero ? 'gold' : 'primary'}>Register as an agent</ButtonLink></span>
+          <span className="hidden sm:block"><ButtonLink to="/register" variant={overHero ? 'gold' : 'primary'}>Register</ButtonLink></span>
           <button
             ref={menuButton}
             type="button"
@@ -103,7 +103,7 @@ function SiteHeader() {
                   <ArrowRight className="size-5 text-slate-400" aria-hidden />
                 </Link>
               ))}
-              <ButtonLink to="/register" size="lg" block className="mt-6">Register as an agent</ButtonLink>
+              <ButtonLink to="/register" size="lg" block className="mt-6">Register</ButtonLink>
             </nav>
           </m.div>
         )}
@@ -129,7 +129,7 @@ function SiteFooter() {
         <div>
           <h2 className="font-display text-lg font-semibold text-white">Registration</h2>
           <ul className="mt-4 space-y-2.5 text-[15px]">
-            <li><Link className="hover:text-white" to="/register">Register as an agent</Link></li>
+            <li><Link className="hover:text-white" to="/register">Register</Link></li>
             <li><Link className="hover:text-white" to="/status">Check registration status</Link></li>
             <li><Link className="hover:text-white" to="/#requirements">What you need</Link></li>
             <li><Link className="hover:text-white" to="/#faq">Questions and answers</Link></li>
