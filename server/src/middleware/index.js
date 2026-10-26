@@ -161,6 +161,18 @@ export const limits = {
   // one IP address, and coordinators may register a team from one phone.
   register: limiter(15, 30, 'Too many registration attempts from this connection. Wait 15 minutes and try again.', 'register'),
   login: limiter(15, 10, 'Too many sign-in attempts. Wait 15 minutes and try again.', 'login'),
+  // Exports are expensive: per signed-in user, shared across instances.
+  export: rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    skip: () => env.NODE_ENV === 'test' && !process.env.RATE_LIMITS_IN_TESTS,
+    keyGenerator: (req) => `user:${req.user?._id ?? 'anonymous'}`,
+    store: new MongoRateLimitStore('export'),
+    passOnStoreError: true,
+    handler: (_req, _res, next) => next(new ApiError(429, 'RATE_LIMITED', 'Too many downloads. Wait 15 minutes and try again.')),
+  }),
   lookup: limiter(15, 40, 'Too many status checks. Wait 15 minutes and try again.', 'lookup'),
 };
 

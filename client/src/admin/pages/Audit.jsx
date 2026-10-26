@@ -5,6 +5,7 @@ import { useFetch } from '../../lib/useFetch.js';
 import { PageHeader, Pagination, th, td } from '../ui.jsx';
 import { EmptyState, ErrorState, Skeleton } from '../../components/ui/Feedback.jsx';
 import { formatDateTime } from '../../lib/format.js';
+import { accountRoleLabel } from '../../../../shared/options.js';
 
 export default function Audit() {
   const { api } = useAdmin();
@@ -24,7 +25,7 @@ export default function Audit() {
                 {data.map((a) => (
                   <tr key={a._id}>
                     <td className={`${td} whitespace-nowrap text-slate-500`}>{formatDateTime(a.createdAt)}</td>
-                    <td className={td}><span className="font-medium">{a.actorName ?? 'System'}</span><span className="block text-xs capitalize text-slate-500">{a.actorRole}</span></td>
+                    <td className={td}><span className="font-medium">{a.actorName ?? 'System'}</span><span className="block text-xs text-slate-500">{accountRoleLabel(a.actorRole)}</span></td>
                     <td className={td}><code className="rounded bg-mist px-1.5 py-0.5 text-xs text-forest-800">{a.action}</code></td>
                     <td className={`${td} text-slate-600`}>{a.summary}</td>
                   </tr>

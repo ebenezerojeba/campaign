@@ -5,6 +5,8 @@
 export const AGENT_CATEGORIES = [
   { value: 'agent_1', label: 'Agent 1' },
   { value: 'agent_2', label: 'Agent 2' },
+  { value: 'ward_collation_officer', label: 'Ward Collation Officer' },
+  { value: 'lga_collation_officer', label: 'LGA Collation Officer' },
   { value: 'canvasser', label: 'Canvasser' },
   { value: 'mobilizer', label: 'Mobilizer' },
   // { value: 'pu_agent', label: 'PU Agent' },
@@ -12,9 +14,25 @@ export const AGENT_CATEGORIES = [
   { value: 'agent', label: 'Agent' },
 ];
 
-// The only agent types offered on the form. Older values above stay valid
-// for registrations made before the change.
-export const REGISTRATION_CATEGORIES = AGENT_CATEGORIES.filter(({ value }) => ['agent_1', 'agent_2'].includes(value));
+// The roles offered on the form. Older values above stay valid for
+// registrations made before the change.
+export const REGISTRATION_CATEGORIES = AGENT_CATEGORIES.filter(({ value }) => ['agent_1', 'agent_2', 'ward_collation_officer', 'lga_collation_officer'].includes(value));
+
+// Where each role serves: a polling unit (agents), a ward or a whole LGA.
+// Decides which location fields are required and which position is claimed.
+export const ROLE_LEVEL = {
+  agent_1: 'pollingUnit',
+  agent_2: 'pollingUnit',
+  ward_collation_officer: 'ward',
+  lga_collation_officer: 'lga',
+};
+export const levelOf = (category) => ROLE_LEVEL[category] ?? 'pollingUnit';
+export const OFFICER_CATEGORIES = ['ward_collation_officer', 'lga_collation_officer'];
+
+// Sign-in account roles, for display.
+export const ACCOUNT_ROLE_LABELS = { admin: 'Admin', reviewer: 'Reviewer', lga_officer: 'LGA Collation Officer', ward_officer: 'Ward Collation Officer' };
+export const accountRoleLabel = (role) => ACCOUNT_ROLE_LABELS[role] ?? role ?? '';
+export const isOfficer = (category) => OFFICER_CATEGORIES.includes(category);
 
 // Commercial, non-interest and widely used microfinance banks licensed in
 // Nigeria. Review against the CBN list periodically.
@@ -61,12 +79,14 @@ export const REGISTRATION_STATUSES = [
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Not approved' },
   { value: 'cancelled', label: 'Cancelled' },
+  { value: 'revoked', label: 'Revoked' },
 ];
 
-// Statuses that hold a polling-unit position (Agent 1 or Agent 2). Rejected
-// and cancelled registrations release it.
+// Statuses that hold a position (an Agent 1 / Agent 2 slot at a polling unit,
+// or a ward or LGA collation officer post). Rejected, cancelled and revoked
+// registrations release it.
 export const POSITION_HOLDING_STATUSES = ['pending', 'approved'];
-export const POSITION_CATEGORIES = ['agent_1', 'agent_2'];
+export const POSITION_CATEGORIES = ['agent_1', 'agent_2', 'ward_collation_officer', 'lga_collation_officer'];
 
 export const DOCUMENT_KINDS = [
   { value: 'passport', label: 'Passport photograph' },

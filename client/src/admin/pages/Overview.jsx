@@ -129,6 +129,21 @@ export default function Overview() {
             <StatTile label="Not approved" value={totals.rejected} icon={CircleX} tone="rejected" />
           </div>
 
+          {data.officerPosts && (
+            <Card title="Collation officer posts" actions={<Link to={`${base}/officers`} className="text-sm font-semibold text-green-700 hover:underline">See all posts</Link>}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[['LGA Collation Officers', data.officerPosts.lga], ['Ward Collation Officers', data.officerPosts.ward]].map(([label, p]) => (
+                  <div key={label} className="rounded-xl border border-line p-4">
+                    <p className="text-sm text-slate-500">{label}</p>
+                    <p className="mt-1 font-display text-2xl font-semibold text-forest-900 tabular">{formatNumber(p.filled)} <span className="text-base font-normal text-slate-500">of {formatNumber(p.capacity)} filled</span></p>
+                    <p className="mt-1 text-sm text-slate-600">{formatNumber(p.approved)} approved · {formatNumber(p.vacant)} vacant{p.contested ? ` · ${formatNumber(p.contested)} contested` : ''}</p>
+                    {!p.reconciled && <p className="mt-2 text-sm text-danger-700">The configured total does not match the official data ({p.locations} locations).</p>}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           <div className="grid gap-6 lg:grid-cols-3">
             <Trend data={data.trend} />
             <Card title="Needs attention">

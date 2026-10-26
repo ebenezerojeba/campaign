@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { ArrowLeft, CircleCheck, CircleX, CircleSlash, RotateCcw, Mail, Phone, MessageSquareText, Send, Download, ExternalLink, FileText, Trash2, Eye, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, CircleCheck, CircleX, CircleSlash, Ban, KeyRound, Landmark, RotateCcw, Mail, Phone, MessageSquareText, Send, Download, ExternalLink, FileText, Trash2, Eye, ShieldAlert } from 'lucide-react';
 import { useAdmin, can } from '../context.jsx';
 import { useFetch } from '../../lib/useFetch.js';
 import { Card, PageHeader } from '../ui.jsx';
@@ -9,7 +9,7 @@ import { TextArea, TextField, Checkbox } from '../../components/ui/Field.jsx';
 import { Alert, Badge, Dialog, ErrorState, SampleBadge, Skeleton, StatusBadge, STATUS_LABEL } from '../../components/ui/Feedback.jsx';
 import { useToast } from '../../components/ui/Toast.jsx';
 import { formatDate, formatDateTime, formatPhone, relativeTime } from '../../lib/format.js';
-import { AGENT_CATEGORIES, DOCUMENT_KINDS, labelFor } from '../../../../shared/options.js';
+import { AGENT_CATEGORIES, DOCUMENT_KINDS, labelFor, isOfficer, levelOf } from '../../../../shared/options.js';
 import { formatBytes } from '../../../../shared/agentForm.js';
 import { nameFound, dateFound } from '../../../../shared/cardCheck.js';
 import { stateLabel } from '../../../../shared/nigeria.js';
@@ -18,6 +18,7 @@ const ACTIONS = {
   approved: { label: 'Approve registration', verb: 'Approve', icon: CircleCheck, variant: 'primary', body: 'Confirm that you have checked the passport photograph and voter’s card against the details given.' },
   rejected: { label: 'Decline registration', verb: 'Decline', icon: CircleX, variant: 'danger', body: 'The applicant will be told their registration was not approved at this time.' },
   pending: { label: 'Return to pending', verb: 'Return to pending', icon: RotateCcw, variant: 'secondary', body: 'The registration goes back into the review queue. It needs the polling-unit position to be free. No message is sent.' },
+  revoked: { label: 'Revoke assignment', verb: 'Revoke', icon: Ban, variant: 'danger', body: 'Use this when an approved agent or officer should no longer serve. The position is released and any collation officer dashboard access stops at once. No message is sent.' },
   cancelled: { label: 'Cancel registration', verb: 'Cancel registration', icon: CircleSlash, variant: 'secondary', body: 'Use this when the applicant withdraws or was registered by mistake. The polling-unit position is released for someone else. No message is sent.' },
 };
 
@@ -249,6 +250,50 @@ function IdentityChecks({ agent, onChecked }) {
   );
 }
 
+// Collation officers only: their dashboard account and invitation.
+function OfficerAccess({ agent, onChange }) {
+  const { api, user, demo } = useAdmin();
+  const notify = useToast();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  if (!isOfficer(agent.agentCategory)) return null;
+  const access = agent.officerAccess;
+  const allowed = can(user, 'officers:manage') && !demo;
+  const ready = agent.status === 'approved' && agent.position?.state === 'holder';
+
+  const act = async (path, done) => {
+    setBusy(true);
+    setError(null);
+    try {
+      onChange(await api.post(`/agents/${agent._id}/${path}`));
+      notify(done);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const state = !access ? 'No dashboard account yet.'
+    : !access.active ? 'Dashboard access is switched off.'
+      : access.passwordSet ? `Active${access.lastLoginAt ? `, last signed in ${formatDateTime(access.lastLoginAt)}` : ', not signed in yet'}.`
+        : `Invitation sent; password not set yet${access.inviteExpiresAt ? ` (link expires ${formatDateTime(access.inviteExpiresAt)})` : ''}.`;
+
+  return (
+    <Card title="Collation officer dashboard" description={`Gives ${agent.firstName} a sign-in for figures about their own ${levelOf(agent.agentCategory) === 'lga' ? 'LGA' : 'ward'} only: no personal details of applicants.`}>
+      <p className="flex items-center gap-2 text-[15px] text-ink"><Landmark className="size-4 text-slate-400" aria-hidden />{state}</p>
+      {!ready && <p className="mt-2 text-sm text-slate-500">Available once the registration is approved and holds its post.</p>}
+      {error && <Alert tone="error" className="mt-3">{error}</Alert>}
+      {allowed && ready && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(!access || !access.active) && <Button icon={KeyRound} loading={busy} loadingText="Sending" onClick={() => act('officer-access', 'Dashboard access given; a set-password email is on its way')}>Give dashboard access</Button>}
+          {access?.active && <Button variant="secondary" icon={KeyRound} loading={busy} loadingText="Sending" onClick={() => act('officer-access/invite', 'A new set-password email is on its way')}>Send a new set-password link</Button>}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function Documents({ agent }) {
   const { user, demo } = useAdmin();
   const allowed = can(user, 'documents:read');
@@ -400,7 +445,8 @@ export default function AgentDetail() {
   if (error) return <ErrorState error={error} onRetry={reload} />;
 
   const reviewer = can(user, 'agents:review');
-  const options = ['approved', 'rejected', 'cancelled', 'pending'].filter((s) => s !== a.status);
+  // Revoking is for approved registrations; declining is for ones not yet approved.
+  const options = (a.status === 'approved' ? ['revoked', 'pending'] : ['approved', 'rejected', 'cancelled', 'pending']).filter((s) => s !== a.status);
   const fullName = [a.firstName, a.middleName, a.lastName].filter(Boolean).join(' ');
 
   return (
@@ -435,14 +481,15 @@ export default function AgentDetail() {
               <SensitiveDetails agent={a} />
               <Row label="Origin">{a.lgaOfOrigin && `${a.lgaOfOrigin} LGA, ${stateLabel(a.stateOfOrigin)}`}</Row>
               <Row label="LGA">{`${a.lga} LGA, ${a.state ?? 'Lagos'} State`}</Row>
-              <Row label="Ward">{a.ward && <>{a.ward}<span className="ml-1.5 text-sm text-slate-500 tabular">{a.wardCode}</span></>}</Row>
-              <Row label="Polling unit">{a.pollingUnit}</Row>
+              {levelOf(a.agentCategory) !== 'lga' && <Row label="Ward">{a.ward && <>{a.ward}<span className="ml-1.5 text-sm text-slate-500 tabular">{a.wardCode}</span></>}</Row>}
+              {levelOf(a.agentCategory) === 'pollingUnit' && <Row label="Polling unit">{a.pollingUnit}</Row>}
               <Row label="Delimitation">{a.pollingUnitCode && <><span className="font-mono">{a.pollingUnitCode}</span>{a.senatorialDistrict && <span className="text-slate-500"> · {titleCase(a.senatorialDistrict)} senatorial district</span>}</>}</Row>
               <Row label="Consent">
                 Processing and document storage agreed {formatDateTime(a.consent?.at)} (notice {a.consent?.noticeVersion}).
               </Row>
             </dl>
           </Card>
+          <OfficerAccess agent={a} onChange={(officerAccess) => setData((d) => ({ ...d, officerAccess }))} />
           <IdentityChecks agent={a} onChecked={(checks) => setData((d) => ({ ...d, checks }))} />
           <Documents agent={a} />
           <Notes agent={a} onAdded={(notes) => setData((d) => ({ ...d, notes }))} />

@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { STATE, LGA_NAMES } from './lagos.js';
 import { STATE_NAMES, isValidStateLga } from './nigeria.js';
-import { NIGERIAN_BANKS, REGISTRATION_CATEGORIES, valuesOf } from './options.js';
+import { NIGERIAN_BANKS, REGISTRATION_CATEGORIES, valuesOf, levelOf } from './options.js';
 
 const NAME_RE = /^[\p{L}][\p{L}\p{M}' .-]*$/u;
 
@@ -100,7 +100,7 @@ export const personalSchema = z.object({
 });
 
 export const roleSchema = z.object({
-  agentCategory: z.enum(valuesOf(REGISTRATION_CATEGORIES), { errorMap: () => ({ message: 'Choose your agent type' }) }),
+  agentCategory: z.enum(valuesOf(REGISTRATION_CATEGORIES), { errorMap: () => ({ message: 'Choose your role' }) }),
   state: z.literal(STATE, { errorMap: () => ({ message: 'Registration is for polling units in Lagos State' }) }),
   lga: z.enum(LGA_NAMES, { errorMap: () => ({ message: 'Choose your Local Government Area' }) }),
   // Chosen by INEC code. The server checks both against the official dataset
@@ -134,9 +134,12 @@ function refinePersonal(data, ctx) {
   }
 }
 
+// LGA officers choose an LGA only; ward officers an LGA and ward; agents
+// go down to the polling unit.
 function refineRole(data, ctx) {
-  if (data.electoralRequired && !data.wardCode) ctx.addIssue({ code: 'custom', path: ['wardCode'], message: 'Choose your ward' });
-  if (data.electoralRequired && !data.pollingUnitCode) ctx.addIssue({ code: 'custom', path: ['pollingUnitCode'], message: 'Choose your polling unit' });
+  const level = levelOf(data.agentCategory);
+  if (data.electoralRequired && level !== 'lga' && !data.wardCode) ctx.addIssue({ code: 'custom', path: ['wardCode'], message: 'Choose your ward' });
+  if (data.electoralRequired && level === 'pollingUnit' && !data.pollingUnitCode) ctx.addIssue({ code: 'custom', path: ['pollingUnitCode'], message: 'Choose your polling unit' });
 }
 
 export const registrationSchema = personalSchema

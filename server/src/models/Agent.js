@@ -27,7 +27,7 @@ const statusChangeSchema = new Schema(
 // Delivery record for every transactional message, for troubleshooting.
 const notificationSchema = new Schema(
   {
-    type: { type: String, enum: ['registration_confirmation', 'decision', 'admin_alert'] },
+    type: { type: String, enum: ['registration_confirmation', 'decision', 'admin_alert', 'officer_invite'] },
     channel: { type: String, default: 'email' },
     // 'sent' means the SMTP server accepted the message, not that it was delivered.
     status: { type: String, enum: ['sent', 'failed', 'skipped'] },

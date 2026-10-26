@@ -71,8 +71,12 @@ export function pollingUnitsFor(state, lga, wardCode) {
 
 // Resolves the applicant's ward and polling-unit choices against the official
 // data. Returns the fields to store, or { errors } keyed by form field.
-export function resolveElectoral({ state, lga, wardCode, pollingUnitCode, ward }) {
+// `level` is where the role serves ('pollingUnit', 'ward' or 'lga'): only the
+// location fields for that level are checked and stored.
+export function resolveElectoral({ state, lga, wardCode, pollingUnitCode, ward, level = 'pollingUnit' }) {
   const entry = lgaEntry(state, lga);
+  if (entry && level === 'lga') return { fields: { senatorialDistrict: entry.senatorialDistrict } };
+  if (level === 'ward') pollingUnitCode = undefined;
   if (!entry) {
     if (wardCode || pollingUnitCode) {
       return { errors: { wardCode: `Ward and polling unit data is not available for ${lga} yet. Leave these blank.` } };
@@ -88,7 +92,9 @@ export function resolveElectoral({ state, lga, wardCode, pollingUnitCode, ward }
     errors.wardCode = `Choose a ward in ${lga} LGA`;
   }
   const pu = w && pollingUnitCode ? w.pollingUnits.get(pollingUnitCode) : null;
-  if (!pollingUnitCode) {
+  if (level === 'ward') {
+    // Ward officers: the ward is enough.
+  } else if (!pollingUnitCode) {
     if (ELECTORAL_FIELDS_REQUIRED) errors.pollingUnitCode = 'Choose your polling unit';
   } else if (w && !pu) {
     errors.pollingUnitCode = `Choose a polling unit in ${w.name} ward`;

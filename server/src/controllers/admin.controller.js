@@ -6,11 +6,14 @@ import { ApiError, send } from '../utils/ApiError.js';
 import { toCsv } from '../utils/csv.js';
 import { decryptField } from '../utils/secure.js';
 import { audit } from '../services/audit.js';
-import { queueDecisionEmail, kickOutbox, drainOutbox, outboxStatus } from '../services/outbox.js';
+import { queueDecisionEmail, queueOfficerInvite, kickOutbox, drainOutbox, outboxStatus } from '../services/outbox.js';
 import { openDocument, deleteDocuments, hasDocument } from '../services/documents.js';
 import * as throttle from '../services/throttle.js';
 import { claimPosition, releasePosition, positionEffect, positionFor, positionConflicts } from '../services/positions.js';
 import { recordReviewerCheck, latestChecks } from '../services/identityChecks.js';
+import { grantOfficerAccess, revokeOfficerAccess, accessFor, AccessProblem } from '../services/officers.js';
+import { officerPosts } from '../services/officerPosts.js';
+import { isOfficer } from '../../../shared/options.js';
 import { issueStaffSession, clearSession, readStaffToken, STAFF_COOKIE } from '../middleware/index.js';
 import { normalisePhone, POLLING_UNIT_CODE_RE } from '../../../shared/schemas.js';
 import { labelFor, AGENT_CATEGORIES, DOCUMENT_KINDS } from '../../../shared/options.js';
@@ -77,6 +80,7 @@ export async function changePassword(req, res) {
     throw new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields: { newPassword: 'Choose a password different from your current one' } });
   }
   user.passwordHash = await User.hashPassword(newPassword);
+  user.passwordSetAt = new Date();
   user.tokenVersion += 1;
   await user.save();
   issueStaffSession(res, user);
@@ -90,7 +94,7 @@ export async function dashboard(_req, res) {
   const since = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000);
   since.setHours(0, 0, 0, 0);
 
-  const [byStatus, trend, byLga, byCategory, recent, sampleCount] = await Promise.all([
+  const [byStatus, trend, byLga, byCategory, recent, sampleCount, posts] = await Promise.all([
     Agent.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
     Agent.aggregate([
       { $match: { createdAt: { $gte: since } } },
@@ -101,7 +105,9 @@ export async function dashboard(_req, res) {
     Agent.aggregate([{ $group: { _id: '$agentCategory', n: { $sum: 1 } } }, { $sort: { n: -1 } }]),
     Agent.find().sort({ createdAt: -1 }).limit(6).select('reference firstName lastName agentCategory lga status createdAt isSample').lean(),
     Agent.countDocuments({ isSample: true }),
+    officerPosts(),
   ]);
+  const postSummary = ({ posts: _list, ...rest }) => rest;
 
   // Fill missing days so the chart has a continuous 30-day axis.
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -119,7 +125,9 @@ export async function dashboard(_req, res) {
       approved: count('approved'),
       rejected: count('rejected'),
       cancelled: count('cancelled'),
+      revoked: count('revoked'),
     },
+    officerPosts: { lga: postSummary(posts.lga), ward: postSummary(posts.ward) },
     trend: days,
     byLga: byLga.map((l) => ({ lga: l._id, total: l.total, approved: l.approved })),
     byCategory: byCategory.map((c) => ({ category: c._id, label: labelFor(AGENT_CATEGORIES, c._id), count: c.n })),
@@ -216,6 +224,7 @@ export async function getAgent(req, res) {
     documents: publicDocuments(a.documents),
     position: await positionFor(a),
     checks: await latestChecks(a._id),
+    officerAccess: isOfficer(a.agentCategory) ? await accessFor(a._id) : undefined,
     auditTrail,
   });
 }
@@ -227,6 +236,41 @@ export async function runIdentityCheck(req, res) {
   if (!check) throw ApiError.notFound('This registration does not exist');
   await audit(req, { action: 'agent.identity_checked', targetType: 'Agent', targetId: check.agent, summary: `Card check: VIN ${check.vin.result}, face ${check.face.result}`, meta: { vin: check.vin.result, face: check.face.result, name: check.name, dateOfBirth: check.dateOfBirth } });
   send(res, (await latestChecks(check.agent)));
+}
+
+// ---------- Collation officers ----------
+
+// Every LGA and ward officer post with its state, for the admin posts page.
+export async function listOfficerPosts(_req, res) {
+  send(res, await officerPosts());
+}
+
+const accessError = (err) => (err instanceof AccessProblem
+  ? (err.code === 'NOT_FOUND' ? ApiError.notFound(err.message) : ApiError.conflict(err.message, err.code))
+  : err);
+
+// Gives an approved officer a dashboard account and emails a one-time link to set a password.
+export async function grantOfficerDashboard(req, res) {
+  let result;
+  try {
+    result = await grantOfficerAccess(req.params.id);
+  } catch (err) {
+    throw accessError(err);
+  }
+  await queueOfficerInvite(result.user);
+  kickOutbox({ max: 1, minIntervalMs: 0 });
+  await audit(req, { action: 'officer.access_granted', targetType: 'Agent', targetId: req.params.id, summary: `Dashboard access ${result.created ? 'given' : 'renewed'}; set-password email queued` });
+  send(res, await accessFor(req.params.id));
+}
+
+// Sends a new set-password link (the previous one stops working).
+export async function resendOfficerInvite(req, res) {
+  const user = await User.findOne({ 'assignment.agent': req.params.id, active: true });
+  if (!user) throw ApiError.notFound('This registration has no active dashboard account');
+  await queueOfficerInvite(user);
+  kickOutbox({ max: 1, minIntervalMs: 0 });
+  await audit(req, { action: 'officer.invite_resent', targetType: 'Agent', targetId: req.params.id, summary: 'New set-password email queued' });
+  send(res, await accessFor(req.params.id));
 }
 
 // Polling-unit positions with more than one Pending or Approved registration.
@@ -293,7 +337,7 @@ export async function getAgentDocument(req, res) {
 
 export async function updateAgentStatus(req, res) {
   const { status, reason, notify } = req.body;
-  const current = await Agent.findById(req.params.id).select('status reference pollingUnitCode agentCategory isSample').lean();
+  const current = await Agent.findById(req.params.id).select('status reference pollingUnitCode wardCode lga agentCategory isSample').lean();
   if (!current) throw ApiError.notFound('This registration does not exist');
   const from = current.status;
   if (from === status) throw ApiError.conflict(`This registration is already ${status}`);
@@ -312,10 +356,12 @@ export async function updateAgentStatus(req, res) {
   const effect = positionEffect(from, status);
   let claim = { ok: true, created: false };
   if (effect === 'claim') {
-    claim = await claimPosition(current._id, current.pollingUnitCode, current.agentCategory);
+    claim = await claimPosition(current._id, current);
     if (!claim.ok) {
+      const role = labelFor(AGENT_CATEGORIES, current.agentCategory);
+      if (claim.reason === 'capacity') throw ApiError.conflict(`All ${role} positions are filled. Revoke or cancel one first.`, 'POSITION_TAKEN');
       const who = claim.holder?.reference ? ` by ${claim.holder.reference}` : '';
-      throw ApiError.conflict(`This polling unit's ${labelFor(AGENT_CATEGORIES, current.agentCategory)} position is held${who}. Decline or cancel that registration first.`, 'POSITION_TAKEN');
+      throw ApiError.conflict(`This ${role} position is held${who}. Decline, cancel or revoke that registration first.`, 'POSITION_TAKEN');
     }
   }
 
@@ -327,10 +373,15 @@ export async function updateAgentStatus(req, res) {
     { new: true },
   );
   if (!a) {
-    if (claim.created) await releasePosition(current._id, current.pollingUnitCode, current.agentCategory).catch(() => {});
+    if (claim.created) await releasePosition(current._id, current).catch(() => {});
     throw ApiError.conflict('Someone else changed this registration at the same time. Refresh the page and try again.', 'STATUS_CHANGED');
   }
-  if (effect === 'release') await releasePosition(a._id, a.pollingUnitCode, a.agentCategory);
+  if (effect === 'release') {
+    await releasePosition(a._id, a);
+    if (isOfficer(a.agentCategory) && (await revokeOfficerAccess(a._id))) {
+      await audit(req, { action: 'officer.access_revoked', targetType: 'Agent', targetId: a._id, summary: `Dashboard access switched off for ${a.reference} (${status})` });
+    }
+  }
   await audit(req, { action: 'agent.status_changed', targetType: 'Agent', targetId: a._id, summary: `${a.reference}: ${from} → ${status}`, meta: { from, to: status, reason } });
 
   let notification = null;
@@ -362,13 +413,14 @@ export async function addAgentNote(req, res) {
 // Erasure (for example, an applicant's deletion request received by email):
 // removes the record and every uploaded document. The audit entry keeps only the reference.
 export async function deleteAgent(req, res) {
-  const a = await Agent.findById(req.params.id).select('reference documents pollingUnitCode agentCategory').lean();
+  const a = await Agent.findById(req.params.id).select('reference documents pollingUnitCode wardCode lga agentCategory').lean();
   if (!a) throw ApiError.notFound('This registration does not exist');
   // Typing the reference confirms a permanent deletion.
   if (a.reference !== req.body.confirmReference) throw ApiError.badRequest('Type the registration reference exactly to confirm deletion');
   await deleteDocuments(Object.values(a.documents ?? {}));
   await Agent.deleteOne({ _id: a._id });
-  await releasePosition(a._id, a.pollingUnitCode, a.agentCategory);
+  await releasePosition(a._id, a);
+  await revokeOfficerAccess(a._id);
   await audit(req, { action: 'agent.deleted', targetType: 'Agent', targetId: a._id, summary: `Deleted ${a.reference} and its documents`, meta: { reason: req.body.reason } });
   send(res, { deleted: true });
 }
@@ -472,6 +524,7 @@ export async function updateStaff(req, res) {
   if (String(user._id) === String(req.user._id) && (req.body.active === false || (req.body.role && req.body.role !== 'admin'))) {
     throw ApiError.conflict('You cannot deactivate or demote your own account');
   }
+  if (req.body.role && user.assignment) throw ApiError.conflict('Collation officer accounts keep their role. Switch the account off instead.');
   if (req.body.role) user.role = req.body.role;
   if (typeof req.body.active === 'boolean') user.active = req.body.active;
   user.tokenVersion += 1; // end existing sessions after a permission change

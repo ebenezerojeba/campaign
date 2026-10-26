@@ -1,4 +1,5 @@
 // Email outbox: queuing, pacing, retries and duplicate prevention, against an
+// Test dates are set in 2036 so queued emails are never "in the past" relative to the real clock.
 // in-memory MongoDB and a fake SMTP transporter. Nothing is ever sent.
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -127,7 +128,7 @@ test('a registration is saved and its emails are queued, not sent inline', async
 
 test('draining delivers queued emails and records the outcome on the registration', async () => {
   const res = await register();
-  const summary = await outbox.drainOutbox({ max: 5, now: at('2026-11-01T15:00:10Z') });
+  const summary = await outbox.drainOutbox({ max: 5, now: at('2036-11-01T15:00:10Z') });
   assert.equal(summary.sent, 2);
   assert.deepEqual(sent.map((m) => m.to).sort(), ['alerts@example.org', sent.find((m) => m.to !== 'alerts@example.org').to].sort());
   assert.ok(sent.every((m) => m.from.address === 'notifications@apclagos.org'));
@@ -154,26 +155,26 @@ test('SMTP 451 rate limiting: retried later with backoff, sending paused, reason
   const agent = await savedAgent();
   await outbox.queueRegistrationEmails(agent);
   behaviour = RATE_LIMIT;
-  const first = await outbox.drainOutbox({ max: 5, now: at('2026-11-01T15:00:00Z') });
+  const first = await outbox.drainOutbox({ max: 5, now: at('2036-11-01T15:00:00Z') });
   assert.equal(first.retry, 1);
   assert.equal(first.stoppedBy, 'paused', 'stops at the first rate-limit refusal');
   const entry = await EmailOutbox.findOne({ type: 'registration_confirmation' }).lean();
   assert.equal(entry.status, 'queued');
   assert.equal(entry.attempts, 1);
-  assert.equal(entry.nextAttemptAt.toISOString(), '2026-11-01T15:05:00.000Z');
+  assert.equal(entry.nextAttemptAt.toISOString(), '2036-11-01T15:05:00.000Z');
   assert.equal(entry.smtpCode, 451);
   assert.equal(entry.smtpReason, '451 4.7.1 Ratelimit "hostinger_domain_out_ratelimit" exceeded');
   assert.ok(!JSON.stringify(entry).includes('RLsecretkey123'));
 
   const state = await EmailState.findById('smtp').lean();
-  assert.equal(state.pausedUntil.toISOString(), '2026-11-01T15:01:00.000Z', 'rate-limit pause is 60 seconds');
+  assert.equal(state.pausedUntil.toISOString(), '2036-11-01T15:01:00.000Z', 'rate-limit pause is 60 seconds');
 
   behaviour = null;
-  const paused = await outbox.drainOutbox({ max: 5, now: at('2026-11-01T15:00:30Z') });
+  const paused = await outbox.drainOutbox({ max: 5, now: at('2036-11-01T15:00:30Z') });
   assert.equal(paused.stoppedBy, 'paused');
   assert.equal(sent.length, 0, 'nothing sent during the pause');
 
-  const later = await outbox.drainOutbox({ max: 5, now: at('2026-11-01T15:06:00Z') });
+  const later = await outbox.drainOutbox({ max: 5, now: at('2036-11-01T15:06:00Z') });
   assert.equal(later.sent, 2);
   assert.equal((await EmailOutbox.findOne({ type: 'registration_confirmation' }).lean()).status, 'sent');
 });
@@ -182,11 +183,11 @@ test('permanent rejection (5xx) is not retried and is recorded for recovery', as
   const agent = await savedAgent();
   await outbox.queueRegistrationEmails(agent);
   behaviour = (m) => (m.to === agent.email ? smtpError('EENVELOPE', 550, '550 5.1.1 mailbox unavailable') : null);
-  await outbox.drainOutbox({ max: 5, now: at('2026-11-01T16:00:00Z') });
+  await outbox.drainOutbox({ max: 5, now: at('2036-11-01T16:00:00Z') });
   const entry = await EmailOutbox.findOne({ type: 'registration_confirmation' }).lean();
   assert.equal(entry.status, 'failed');
   assert.equal(entry.attempts, 1);
-  const again = await outbox.drainOutbox({ max: 5, now: at('2026-11-01T23:00:00Z') });
+  const again = await outbox.drainOutbox({ max: 5, now: at('2036-11-01T23:00:00Z') });
   assert.equal(again.stoppedBy, 'empty');
   const saved = await Agent.findById(agent._id).lean();
   assert.ok(saved.notifications.some((n) => n.type === 'registration_confirmation' && n.status === 'failed'));
@@ -197,7 +198,7 @@ test('temporary failures stop after the maximum number of attempts', async () =>
   await outbox.queueRegistrationEmails(agent);
   await EmailOutbox.deleteOne({ type: 'admin_alert' });
   behaviour = () => smtpError('ETIMEDOUT', undefined, 'timeout');
-  let clock = new Date('2026-10-24T00:00:00Z').getTime();
+  let clock = new Date('2036-10-24T00:00:00Z').getTime();
   for (let i = 0; i < 10; i += 1) {
     await outbox.drainOutbox({ max: 1, now: () => new Date(clock) });
     clock += 7 * 3600e3; // past every backoff delay and pause
@@ -212,7 +213,7 @@ test('no duplicates: re-queuing is ignored and concurrent senders send each emai
   await outbox.queueRegistrationEmails(agent);
   await outbox.queueRegistrationEmails(agent);
   assert.equal(await EmailOutbox.countDocuments(), 2);
-  const now = at('2026-10-25T10:00:00Z');
+  const now = at('2036-10-25T10:00:00Z');
   await Promise.all([1, 2, 3, 4].map(() => outbox.drainOutbox({ max: 5, now })));
   assert.equal(sent.length, 2, 'each email sent exactly once');
   assert.equal(await EmailOutbox.countDocuments({ status: 'sent' }), 2);
@@ -222,19 +223,19 @@ test('no duplicates: re-queuing is ignored and concurrent senders send each emai
 
 test('pacing: never more than the per-minute budget, and unsent emails keep their attempts', async () => {
   for (let i = 0; i < 3; i += 1) await outbox.queueRegistrationEmails(await savedAgent());
-  const summary = await outbox.drainOutbox({ max: 10, now: at('2026-10-25T11:00:05Z') });
+  const summary = await outbox.drainOutbox({ max: 10, now: at('2036-10-25T11:00:05Z') });
   assert.equal(summary.sent, 3);
   assert.equal(summary.stoppedBy, 'budget');
   const waiting = await EmailOutbox.find({ status: 'queued' }).lean();
   assert.equal(waiting.length, 3);
   assert.ok(waiting.every((e) => e.attempts === 0), 'budget refusal does not use an attempt');
-  const next = await outbox.drainOutbox({ max: 10, now: at('2026-10-25T11:01:05Z') });
+  const next = await outbox.drainOutbox({ max: 10, now: at('2036-10-25T11:01:05Z') });
   assert.equal(next.sent, 3);
 });
 
 test('confirmations are sent before admin alerts', async () => {
   for (let i = 0; i < 2; i += 1) await outbox.queueRegistrationEmails(await savedAgent());
-  await outbox.drainOutbox({ max: 2, now: at('2026-10-25T12:00:00Z') });
+  await outbox.drainOutbox({ max: 2, now: at('2036-10-25T12:00:00Z') });
   assert.ok(sent.every((m) => m.to !== 'alerts@example.org'));
 });
 
@@ -242,7 +243,7 @@ test('a deleted registration cancels its queued emails', async () => {
   const agent = await savedAgent();
   await outbox.queueRegistrationEmails(agent);
   await Agent.deleteOne({ _id: agent._id });
-  await outbox.drainOutbox({ max: 5, now: at('2026-10-25T13:00:00Z') });
+  await outbox.drainOutbox({ max: 5, now: at('2036-10-25T13:00:00Z') });
   assert.equal(sent.length, 0);
   assert.equal(await EmailOutbox.countDocuments({ status: 'cancelled' }), 2);
 });
@@ -250,12 +251,12 @@ test('a deleted registration cancels its queued emails', async () => {
 test('digest mode (off by default) replaces per-registration alerts with one hourly summary', async () => {
   assert.equal(env.outbox.adminAlertMode, 'instant');
   env.outbox.adminAlertMode = 'digest';
-  await savedAgent({ createdAt: new Date('2026-10-26T09:10:00Z') });
-  const second = await savedAgent({ createdAt: new Date('2026-10-26T09:40:00Z') });
+  await savedAgent({ createdAt: new Date('2036-10-26T09:10:00Z') });
+  const second = await savedAgent({ createdAt: new Date('2036-10-26T09:40:00Z') });
   await outbox.queueRegistrationEmails(second);
   assert.equal(await EmailOutbox.countDocuments({ type: 'admin_alert' }), 0);
-  await outbox.drainOutbox({ max: 5, now: at('2026-10-26T10:00:30Z') });
-  await outbox.drainOutbox({ max: 5, now: at('2026-10-26T10:05:30Z') });
+  await outbox.drainOutbox({ max: 5, now: at('2036-10-26T10:00:30Z') });
+  await outbox.drainOutbox({ max: 5, now: at('2036-10-26T10:05:30Z') });
   const digests = sent.filter((m) => m.to === 'alerts@example.org');
   assert.equal(digests.length, 1);
   assert.match(digests[0].subject, /^APC Lagos: Registration Summary \(2 new\)$/);
@@ -281,13 +282,13 @@ test('admin alerts off: none queued, waiting ones cancelled unsent, applicants s
   const after = await savedAgent();
   await outbox.queueRegistrationEmails(after);
   assert.equal(await EmailOutbox.countDocuments({ type: 'admin_alert' }), 1, 'no new admin alert queued');
-  const summary = await outbox.drainOutbox({ max: 5, now: at('2026-11-02T09:00:00Z') });
+  const summary = await outbox.drainOutbox({ max: 5, now: at('2036-11-02T09:00:00Z') });
   assert.equal(summary.sent, 2, 'both confirmations sent');
   assert.ok(sent.every((m) => m.to !== 'alerts@example.org'), 'no admin email sent');
   const alert = await EmailOutbox.findOne({ type: 'admin_alert' }).lean();
   assert.equal(alert.status, 'cancelled');
   assert.equal(alert.attempts, 0, 'cancelled without using the sending allowance');
-  const digest = await outbox.drainOutbox({ max: 5, now: at('2026-11-02T10:00:30Z') });
+  const digest = await outbox.drainOutbox({ max: 5, now: at('2036-11-02T10:00:30Z') });
   assert.equal(digest.sent, 0, 'no hourly summary either');
 });
 
@@ -300,7 +301,7 @@ test('Brevo account-level refusals pause sending and never use up or fail the qu
     () => smtpError('EENVELOPE', 550, '550 5.7.1 Sender is not valid. Please validate your sender'),
     () => smtpError('EMESSAGE', 502, '502 5.7.0 Your account is suspended'),
   ];
-  let clock = new Date('2026-11-02T08:00:00Z').getTime();
+  let clock = new Date('2036-11-02T08:00:00Z').getTime();
   for (const refusal of refusals) {
     behaviour = refusal;
     const run = await outbox.drainOutbox({ max: 5, now: () => new Date(clock) });

@@ -30,7 +30,7 @@ const LEASE_MS = 2 * 60 * 1000;
 // continuously; it is set by EMAIL_RATE_LIMIT_PAUSE_SECONDS.
 const PROVIDER_PAUSE_MS = { rateLimited: env.outbox.rateLimitPauseSeconds * 1000, auth: 30 * 60 * 1000, sender: 30 * 60 * 1000, unreachable: 2 * 60 * 1000, notConfigured: 15 * 60 * 1000 };
 
-const PRIORITY = { registration_confirmation: 1, decision: 2, admin_alert: 3, admin_digest: 3 };
+const PRIORITY = { registration_confirmation: 1, officer_invite: 1, decision: 2, admin_alert: 3, admin_digest: 3 };
 const STATE_ID = 'smtp';
 
 // ---------- Queueing ----------
@@ -144,12 +144,36 @@ async function render(entry) {
     ]);
     return { to: env.smtp.adminTo, ...templates.adminDigest({ ...entry.digest, count, byType: byType.map((t) => ({ type: t._id, count: t.count })), topLgas: topLgas.map((l) => ({ lga: l._id, count: l.count })) }) };
   }
+  if (entry.type === 'officer_invite') return renderOfficerInvite(entry);
   const agent = await Agent.findById(entry.agent).select(AGENT_FIELDS).lean();
   if (!agent) return null; // registration deleted: nothing to send
   if (entry.type === 'registration_confirmation') return { to: agent.email, ...templates.registrationConfirmation(agent) };
   if (entry.type === 'admin_alert') return { to: env.smtp.adminTo, ...templates.adminAlert(agent) };
   if (entry.type === 'decision') return { to: agent.email, ...templates.decision(agent) };
   return null;
+}
+
+// The set-password link is created when the email is sent, so the raw token
+// is never stored: only its hash is kept on the account. A retry creates a new
+// link, which replaces the old one.
+async function renderOfficerInvite(entry) {
+  const { issuePasswordSetup, assignmentLabel, INVITE_HOURS } = await import('./officers.js');
+  const issued = await issuePasswordSetup(entry.user);
+  if (!issued) return null; // account removed or switched off: nothing to send
+  return {
+    to: issued.user.email,
+    ...templates.officerInvite({
+      name: issued.user.name,
+      role: issued.user.role === 'lga_officer' ? 'LGA Collation Officer' : 'Ward Collation Officer',
+      location: assignmentLabel(issued.user.assignment),
+      link: `${env.frontendUrl}/admin/set-password#token=${issued.token}`,
+      expiresHours: INVITE_HOURS,
+    }),
+  };
+}
+
+export async function queueOfficerInvite(user) {
+  return insertIgnoringDuplicates([{ key: `officer_invite:${user._id}:${Date.now()}`, type: 'officer_invite', user: user._id, agent: user.assignment?.agent, priority: PRIORITY.officer_invite }]);
 }
 
 // Mirrors the final outcome onto the registration so the admin page keeps

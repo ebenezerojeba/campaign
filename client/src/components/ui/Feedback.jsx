@@ -43,8 +43,8 @@ export function Badge({ tone = 'neutral', children, className, dot = false }) {
   );
 }
 
-export const STATUS_TONE = { pending: 'pending', approved: 'approved', rejected: 'rejected', cancelled: 'neutral' };
-export const STATUS_LABEL = { pending: 'Pending', approved: 'Approved', rejected: 'Not approved', cancelled: 'Cancelled' };
+export const STATUS_TONE = { pending: 'pending', approved: 'approved', rejected: 'rejected', cancelled: 'neutral', revoked: 'rejected' };
+export const STATUS_LABEL = { pending: 'Pending', approved: 'Approved', rejected: 'Not approved', cancelled: 'Cancelled', revoked: 'Revoked' };
 
 export function StatusBadge({ status }) {
   return <Badge tone={STATUS_TONE[status]} dot>{STATUS_LABEL[status] ?? status}</Badge>;

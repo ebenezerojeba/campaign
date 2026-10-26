@@ -9,7 +9,7 @@
 // Only values passed through esc() reach the HTML. Messages never contain
 // NIN, VIN, party registration numbers, bank details or documents.
 import { env } from '../config/env.js';
-import { labelFor, AGENT_CATEGORIES } from '../../../shared/options.js';
+import { labelFor, AGENT_CATEGORIES, levelOf } from '../../../shared/options.js';
 
 export const esc = (s = '') => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -146,18 +146,24 @@ const agentType = (a) => labelFor(AGENT_CATEGORIES, a.agentCategory);
 const pollingUnit = (a) => (a.pollingUnit ? `${a.pollingUnit} (${a.pollingUnitCode})` : 'Not recorded');
 const ward = (a) => (a.ward ? `${a.ward}${a.wardCode ? ` (${a.wardCode})` : ''}` : 'Not recorded');
 const titleCase = (s = '') => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-const applicantReason = 'You are receiving this email because this address was used to register as an APC Lagos polling unit agent. If you did not register, reply to this email.';
+// "a polling unit agent", "a ward collation officer" or "an LGA collation officer".
+const roleNoun = (a) => ({ ward: 'a ward collation officer', lga: 'an LGA collation officer' }[levelOf(a.agentCategory)] ?? 'a polling unit agent');
+// Location rows for the role: LGA officers have no ward or polling unit.
+const locationRows = (a) => {
+  const level = levelOf(a.agentCategory);
+  return [
+    ...(level === 'pollingUnit' ? [['Polling unit', pollingUnit(a)]] : []),
+    ...(level !== 'lga' ? [['Ward', ward(a)]] : []),
+    ['LGA', a.lga ? `${a.lga}, Lagos State` : ''],
+  ];
+};
+const applicantReason = 'You are receiving this email because this address was used to register with APC Lagos as a polling unit agent or collation officer. If you did not register, reply to this email.';
 
 // ---------- Templates ----------
 
 export function registrationConfirmation(a) {
   const statusUrl = `${site()}/status`;
-  const rows = [
-    ['Agent type', agentType(a)],
-    ['Polling unit', pollingUnit(a)],
-    ['Ward', ward(a)],
-    ['LGA', a.lga ? `${a.lga}, Lagos State` : ''],
-  ];
+  const rows = [['Role', agentType(a)], ...locationRows(a)];
   return {
     subject: `${ORG}: Registration Confirmation (${a.reference})`,
     html: shell({
@@ -166,7 +172,7 @@ export function registrationConfirmation(a) {
       rows: [
         title('Registration received'),
         greeting(a.firstName),
-        paragraph('We have received your registration as a polling unit agent. Your details are below.'),
+        paragraph(`We have received your registration as ${roleNoun(a)}. Your details are below.`),
         reference(a.reference),
         details(rows),
         subheading('What happens next'),
@@ -179,7 +185,7 @@ export function registrationConfirmation(a) {
 
 Dear ${a.firstName},
 
-We have received your registration as a polling unit agent.
+We have received your registration as ${roleNoun(a)}.
 
 Registration reference: ${a.reference}
 ${textDetails(rows)}
@@ -197,12 +203,12 @@ ${textFooter(applicantReason)}`,
 export function decision(a) {
   const approved = a.status === 'approved';
   const heading = approved ? 'Registration approved' : 'Registration not approved';
-  const rows = [['Agent type', agentType(a)], ['Polling unit', pollingUnit(a)]];
+  const rows = [['Role', agentType(a)], ...locationRows(a)];
   const bodyHtml = approved
-    ? [paragraph('Your registration as a polling unit agent has been approved.'), reference(a.reference), details(rows), paragraph('The coordination team will contact you with your next steps.')]
+    ? [paragraph(`Your registration as ${roleNoun(a)} has been approved.`), reference(a.reference), details(rows), paragraph('The coordination team will contact you with your next steps.')]
     : [paragraph('Thank you for registering. After review, we are unable to approve your registration at this time.'), reference(a.reference), paragraph('If you believe any of your details or documents were incorrect, reply to this email and the team will look into it.')];
   const bodyText = approved
-    ? `Your registration as a polling unit agent has been approved.
+    ? `Your registration as ${roleNoun(a)} has been approved.
 
 Registration reference: ${a.reference}
 ${textDetails(rows)}
@@ -236,10 +242,8 @@ export function adminAlert(a) {
   const url = `${site()}/admin/agents/${a._id}`;
   const rows = [
     ['Reference', a.reference],
-    ['Agent type', agentType(a)],
-    ['LGA', a.lga],
-    ['Ward', ward(a)],
-    ['Polling unit', pollingUnit(a)],
+    ['Role', agentType(a)],
+    ...locationRows(a),
     ['Senatorial district', a.senatorialDistrict ? titleCase(a.senatorialDistrict) : ''],
   ];
   const reason = 'You are receiving this email because this address is set to receive new-registration notifications for APC Lagos Polling Unit Agent Registration.';
@@ -250,7 +254,7 @@ export function adminAlert(a) {
       reason,
       rows: [
         title('New agent registration'),
-        paragraph('A new polling unit agent registration has been submitted and is awaiting review.'),
+        paragraph(`A new registration (${esc(agentType(a))}) has been submitted and is awaiting review.`),
         details(rows),
         button({ href: url, label: 'Review registration' }),
         note('Contact details, identification, bank details and documents are available only in the administration dashboard after signing in.'),
@@ -258,7 +262,7 @@ export function adminAlert(a) {
     }),
     text: `New agent registration
 
-A new polling unit agent registration has been submitted and is awaiting review.
+A new registration (${agentType(a)}) has been submitted and is awaiting review.
 
 ${textDetails(rows)}
 
@@ -303,6 +307,43 @@ ${textDetails(rows)}
 Review pending registrations: ${url}
 
 Individual details are available only in the administration dashboard after signing in.
+
+${textFooter(reason)}`,
+  };
+}
+
+// Invitation for an approved collation officer to set a password for their
+// dashboard. The link works once and expires; no password is ever emailed.
+export function officerInvite({ name, role, location, link, expiresHours }) {
+  const reason = 'You are receiving this email because APC Lagos gave you access to a collation officer dashboard. If you were not expecting it, reply to this email.';
+  const rows = [['Role', role], ['Assignment', location]];
+  return {
+    subject: `${ORG}: Set up your collation officer dashboard`,
+    html: shell({
+      preheader: 'Set a password to open your collation officer dashboard.',
+      reason,
+      rows: [
+        title('Your dashboard is ready'),
+        greeting(name),
+        paragraph(`You have been given access to the APC Lagos collation officer dashboard for your assignment.`),
+        details(rows),
+        paragraph(`Choose your password using the button below. The link works once and expires in ${expiresHours} hours.`),
+        button({ href: link, label: 'Set your password' }),
+        note('APC Lagos staff will never ask you for your password. If the link has expired, ask the coordination team to send a new one.'),
+      ],
+    }),
+    text: `Your dashboard is ready
+
+Dear ${name},
+
+You have been given access to the APC Lagos collation officer dashboard for your assignment.
+
+${textDetails(rows)}
+
+Choose your password using this link. It works once and expires in ${expiresHours} hours:
+${link}
+
+APC Lagos staff will never ask you for your password. If the link has expired, ask the coordination team to send a new one.
 
 ${textFooter(reason)}`,
   };

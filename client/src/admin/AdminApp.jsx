@@ -1,8 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, Navigate, NavLink, Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { AnimatePresence, m } from 'framer-motion';
-import { LayoutDashboard, Users, ScrollText, UserCog, LogOut, Menu, X, Eye, ExternalLink, MapPinned, KeyRound } from 'lucide-react';
+import { LayoutDashboard, Users, ScrollText, UserCog, LogOut, Menu, X, Eye, ExternalLink, MapPinned, KeyRound, Landmark, FileSpreadsheet } from 'lucide-react';
 import { Logo } from '../components/brand/Logo.jsx';
+import { accountRoleLabel } from '../../../shared/options.js';
 import { Alert, Dialog, Spinner } from '../components/ui/Feedback.jsx';
 import { Button } from '../components/ui/Button.jsx';
 import { TextField } from '../components/ui/Field.jsx';
@@ -18,11 +19,20 @@ const AgentDetail = lazy(() => import('./pages/AgentDetail.jsx'));
 const Audit = lazy(() => import('./pages/Audit.jsx'));
 const Staff = lazy(() => import('./pages/Staff.jsx'));
 const Positions = lazy(() => import('./pages/Positions.jsx'));
+const OfficerPosts = lazy(() => import('./pages/OfficerPosts.jsx'));
+const Reports = lazy(() => import('./pages/Reports.jsx'));
+const OfficerDashboard = lazy(() => import('./pages/OfficerDashboard.jsx'));
+const SetPassword = lazy(() => import('./pages/SetPassword.jsx'));
 
+// Links appear only for people allowed to use them. The server checks every
+// request regardless.
 const NAV = [
   { to: '', label: 'Overview', icon: LayoutDashboard, permission: 'agents:read', end: true },
+  { to: '', label: 'My dashboard', icon: LayoutDashboard, permission: 'officer:dashboard', end: true },
   { to: 'agents', label: 'Registrations', icon: Users, permission: 'agents:read' },
+  { to: 'officers', label: 'Collation officer posts', icon: Landmark, permission: 'agents:read' },
   { to: 'positions', label: 'Contested positions', icon: MapPinned, permission: 'agents:read' },
+  { to: 'reports', label: 'Reports and downloads', icon: FileSpreadsheet, permission: 'reports:export' },
   { to: 'audit', label: 'Audit log', icon: ScrollText, permission: 'audit:read' },
   { to: 'staff', label: 'Staff accounts', icon: UserCog, permission: 'staff:manage' },
 ];
@@ -107,7 +117,7 @@ function Shell() {
       <Sidebar onNavigate={() => setOpen(false)} />
       <div className="border-t border-white/10 p-4">
         <p className="truncate text-sm font-semibold text-white">{user.name}</p>
-        <p className="truncate text-xs capitalize text-green-50/60">{user.role}</p>
+        <p className="truncate text-xs text-green-50/60">{accountRoleLabel(user.role)}</p>
         {!demo && (
           <button type="button" onClick={() => setChangingPassword(true)} className="mt-3 flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-green-50/80 hover:bg-white/5 hover:text-white">
             <KeyRound className="size-4" aria-hidden />Change password
@@ -163,14 +173,22 @@ function Guard({ permission, children }) {
   return can(user, permission) ? children : <p className="text-slate-600">You do not have access to this page.</p>;
 }
 
+// Officers land on their own dashboard; staff on the overview.
+function Home() {
+  const { user } = useAdmin();
+  return can(user, 'officer:dashboard') ? <OfficerDashboard /> : <Overview />;
+}
+
 function AdminRoutes() {
   return (
     <Routes>
       <Route element={<Shell />}>
-        <Route index element={<Overview />} />
-        <Route path="agents" element={<Agents />} />
-        <Route path="agents/:id" element={<AgentDetail />} />
-        <Route path="positions" element={<Positions />} />
+        <Route index element={<Home />} />
+        <Route path="officers" element={<Guard permission="agents:read"><OfficerPosts /></Guard>} />
+        <Route path="reports" element={<Guard permission="reports:export"><Reports /></Guard>} />
+        <Route path="agents" element={<Guard permission="agents:read"><Agents /></Guard>} />
+        <Route path="agents/:id" element={<Guard permission="agents:read"><AgentDetail /></Guard>} />
+        <Route path="positions" element={<Guard permission="agents:read"><Positions /></Guard>} />
         <Route path="audit" element={<Guard permission="audit:read"><Audit /></Guard>} />
         <Route path="staff" element={<Guard permission="staff:manage"><Staff /></Guard>} />
         <Route path="*" element={<p className="text-slate-600">This page does not exist.</p>} />
@@ -247,6 +265,7 @@ export default function AdminApp() {
   return (
     <Routes>
       <Route path="login" element={<Login />} />
+      <Route path="set-password" element={<Suspense fallback={<Spinner className="min-h-screen" />}><SetPassword /></Suspense>} />
       <Route path="preview/*" element={<Preview />} />
       <Route path="*" element={<Authenticated />} />
     </Routes>

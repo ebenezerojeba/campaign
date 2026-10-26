@@ -6,12 +6,12 @@ import { ApiError, send } from '../utils/ApiError.js';
 import { generateReference } from '../utils/reference.js';
 import { encryptField, keyedHash } from '../utils/secure.js';
 import { normalisePhone } from '../../../shared/schemas.js';
-import { PRIVACY_NOTICE_VERSION, labelFor, REGISTRATION_STATUSES } from '../../../shared/options.js';
+import { PRIVACY_NOTICE_VERSION, labelFor, levelOf, REGISTRATION_STATUSES, AGENT_CATEGORIES } from '../../../shared/options.js';
 import { requiredDocuments } from '../../../shared/agentForm.js';
 import { queueRegistrationEmails, kickOutbox } from '../services/outbox.js';
 import { resolveElectoral, wardsFor, pollingUnitsFor, senatorialDistricts } from '../services/electoral.js';
 import { checkDocument, storeDocument, deleteDocuments } from '../services/documents.js';
-import { claimPosition, releasePosition, takenPositions } from '../services/positions.js';
+import { claimPosition, releasePosition, takenPositions, takenOfficerPosts } from '../services/positions.js';
 import { captchaEnabled, verifyCaptcha } from '../services/captcha.js';
 import { recordApplicantCheck } from '../services/identityChecks.js';
 import mongoose from 'mongoose';
@@ -45,8 +45,14 @@ const LOCATION_CACHE = 'public, max-age=3600';
 
 export async function listWards(req, res) {
   const { state, lga } = req.validatedQuery;
-  res.setHeader('Cache-Control', LOCATION_CACHE);
-  send(res, wardsFor(state, lga));
+  const data = wardsFor(state, lga);
+  // Which officer posts in this LGA are filled (never who holds them).
+  let officerPosts = { lgaOfficer: false, wardOfficers: [] };
+  if (data.configured && dbConfigured()) {
+    try { await connectDb(); officerPosts = await takenOfficerPosts(lga); } catch (err) { console.error('[positions] officer availability unavailable', err?.name); }
+  }
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  send(res, { ...data, officerPosts });
 }
 
 export async function listPollingUnits(req, res) {
@@ -79,7 +85,10 @@ export function parseRegistrationData(req, _res, next) {
 // response never reveals which identifier belongs to an existing registration.
 const DUPLICATE_MESSAGE = 'Some of these details are already used by an existing registration. If you have registered before, check your registration status. Otherwise, contact the registration team.';
 const CAPTCHA_MESSAGE = 'Complete the security check and try again.';
-const positionTakenMessage = (category) => `The ${category === 'agent_2' ? 'Agent 2' : 'Agent 1'} position at this polling unit has already been filled. Check your agent type and polling unit, or contact the coordination team if you were asked to serve here.`;
+const POSITION_PLACE = { pollingUnit: 'at this polling unit', ward: 'for this ward', lga: 'for this LGA' };
+const positionTakenMessage = (category, reason) => (reason === 'capacity'
+  ? `All ${labelFor(AGENT_CATEGORIES, category)} positions have been filled. Contact the coordination team if you were asked to serve.`
+  : `The ${labelFor(AGENT_CATEGORIES, category)} position ${POSITION_PLACE[levelOf(category)]} has already been filled. Check your role and location, or contact the coordination team if you were asked to serve here.`);
 
 const fieldErrors = (fields) => new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields });
 
@@ -89,7 +98,7 @@ export async function register(req, res) {
   const { email } = data;
 
   // Never trust the browser's ward or polling unit: check both against the official data.
-  const electoral = resolveElectoral(data);
+  const electoral = resolveElectoral({ ...data, level: levelOf(data.agentCategory) });
   const errors = { ...(electoral.errors ?? {}) };
 
   // Check every required document by its content, collecting all problems at once.
@@ -163,8 +172,8 @@ export async function register(req, res) {
   // Claim the Agent 1 / Agent 2 position before saving anything. The claim is
   // atomic, so two people submitting for one position at once cannot both win.
   const agentId = new mongoose.Types.ObjectId();
-  const position = await claimPosition(agentId, doc.pollingUnitCode, doc.agentCategory);
-  if (!position.ok) throw fieldErrors({ agentCategory: positionTakenMessage(doc.agentCategory) });
+  const position = await claimPosition(agentId, doc);
+  if (!position.ok) throw fieldErrors({ agentCategory: positionTakenMessage(doc.agentCategory, position.reason) });
 
   let agent;
   try {
@@ -186,7 +195,7 @@ export async function register(req, res) {
     if (!agent) throw new ApiError(500, 'SERVER_ERROR', 'We could not create a reference. Please try again.');
   } catch (err) {
     // Nothing was saved: give the position back.
-    if (position.created) await releasePosition(agentId, doc.pollingUnitCode, doc.agentCategory).catch(() => {});
+    if (position.created) await releasePosition(agentId, doc).catch(() => {});
     throw err;
   }
 

@@ -80,6 +80,23 @@ export const identityCheckSchema = z.object({
   }),
 });
 
+export const reportQuerySchema = z.object({
+  format: z.enum(['xlsx', 'csv']).default('xlsx'),
+  role: z.enum(valuesOf(AGENT_CATEGORIES)).optional(),
+  lga: z.enum(LGA_NAMES).optional(),
+  wardCode: z.string().regex(WARD_CODE_RE).optional(),
+  status: z.enum(valuesOf(REGISTRATION_STATUSES)).optional(),
+  from: isoDate.optional(),
+  to: isoDate.optional(),
+});
+
+export const officerReportQuerySchema = z.object({ format: z.enum(['xlsx', 'csv']).default('xlsx') });
+
+export const setPasswordSchema = z.object({
+  token: z.string().min(20).max(200),
+  password: z.string().min(12, 'Use at least 12 characters').max(200),
+});
+
 export const staffUpdateSchema = z.object({
   role: z.enum(['admin', 'reviewer']).optional(),
   active: z.boolean().optional(),

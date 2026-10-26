@@ -15,7 +15,7 @@ import { RegistrationSuccess } from '../components/RegistrationSuccess.jsx';
 import { STEP_SCHEMAS, STEP_FIELDS, todayInLagos } from '../../../shared/schemas.js';
 import { LGA_NAMES, STATE } from '../../../shared/lagos.js';
 import { STATE_NAMES, lgasOfState, stateLabel } from '../../../shared/nigeria.js';
-import { AGENT_CATEGORIES, NIGERIAN_BANKS, REGISTRATION_CATEGORIES, labelFor } from '../../../shared/options.js';
+import { AGENT_CATEGORIES, NIGERIAN_BANKS, REGISTRATION_CATEGORIES, labelFor, levelOf } from '../../../shared/options.js';
 import { DOCUMENT_RULES, requiredDocuments } from '../../../shared/agentForm.js';
 import { privacyNotice } from '../content/site.js';
 import { get, post } from '../lib/api.js';
@@ -26,7 +26,7 @@ import { compareVin, normaliseVin } from '../../../shared/cardCheck.js';
 
 const STEPS = [
   { title: 'Your details', short: 'Details' },
-  { title: 'Your role and polling unit', short: 'Polling unit' },
+  { title: 'Your role and location', short: 'Role' },
   { title: 'Identity and bank details', short: 'ID & bank' },
   { title: 'Your documents', short: 'Documents' },
   { title: 'Review and submit', short: 'Review' },
@@ -332,35 +332,48 @@ function StepRole({ register, errors, control, watch, setValue }) {
   const unconfigured = wards.status === 'ready' && !wards.data.configured;
   const required = Boolean(configured && wards.data.required);
   const wardKnown = configured && wards.data.wards.some((w) => w.code === wardCode);
-  const units = useLocationList(wardKnown
+  // Where the chosen role serves: agents at a polling unit, ward officers at a
+  // ward, LGA officers across an LGA. Only that level's fields are shown.
+  const level = agentCategory ? levelOf(agentCategory) : 'pollingUnit';
+  const units = useLocationList(wardKnown && level === 'pollingUnit'
     ? `/locations/polling-units?state=${encodeURIComponent(STATE)}&lga=${encodeURIComponent(lga)}&ward=${encodeURIComponent(wardCode)}`
     : null);
+  // Officer posts already filled in this LGA (never who holds them).
+  const officerPosts = configured ? wards.data.officerPosts ?? { lgaOfficer: false, wardOfficers: [] } : null;
+  const lgaPostFilled = level === 'lga' && Boolean(officerPosts?.lgaOfficer);
+  const wardPostFilled = level === 'ward' && Boolean(wardCode && officerPosts?.wardOfficers?.includes(wardCode));
 
   // Lets the browser require ward and polling unit only where official data
   // exists. The server applies the same rule independently.
   useEffect(() => { setValue('electoralRequired', required); }, [required, setValue]);
   useEffect(() => { setValue('senatorialDistrict', configured ? wards.data.senatorialDistrict : ''); }, [configured, wards.data, setValue]);
 
-  const wardOptions = configured ? wards.data.wards.map((w) => ({ value: w.code, label: w.name, description: w.code })) : [];
+  const wardOptions = configured ? wards.data.wards.map((w) => ({ value: w.code, label: w.name, description: `${w.code}${level === 'ward' && officerPosts?.wardOfficers?.includes(w.code) ? ' · officer post filled' : ''}` })) : [];
   // Shows which agent positions are already filled at each polling unit.
   const filledNote = (taken = []) => (taken.length >= 2 ? ' · both agents filled' : taken.length ? ` · ${labelFor(AGENT_CATEGORIES, taken[0])} filled` : '');
   const unitOptions = units.status === 'ready' ? units.data.map((u) => ({ value: u.code, label: u.name, description: `${u.code.slice(-3)}${filledNote(u.taken)}` })) : [];
   const chosenUnit = units.status === 'ready' ? units.data.find((u) => u.code === pollingUnitCode) : null;
   const positionFilled = Boolean(chosenUnit && agentCategory && chosenUnit.taken?.includes(agentCategory));
 
+  // Switching role clears location answers the new role does not use.
+  useEffect(() => {
+    if (level === 'lga') clear('wardCode', 'ward', 'pollingUnitCode', 'pollingUnitName');
+    if (level === 'ward') clear('pollingUnitCode', 'pollingUnitName');
+  }, [level]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="grid gap-10">
       <SelectField
-        label="Agent type"
-        hint="Choose the agent type you have been asked to serve as."
-        placeholder="Choose agent type"
+        label="Role"
+        hint="Choose the role you have been asked to serve in. Agents serve at one polling unit; collation officers serve a whole ward or LGA."
+        placeholder="Choose your role"
         options={REGISTRATION_CATEGORIES}
         className="sm:max-w-sm"
         error={errors.agentCategory?.message}
         {...register('agentCategory')}
       />
 
-      <FieldGroup title="Your polling unit" description="Choose from the official INEC list for Lagos State.">
+      <FieldGroup title={{ lga: 'Your LGA', ward: 'Your ward' }[level] ?? 'Your polling unit'} description="Choose from the official INEC list for Lagos State.">
         <TextField label="State" value="Lagos State" readOnly disabled />
         <Controller control={control} name="lga" render={({ field }) => (
           <Combobox
@@ -387,7 +400,13 @@ function StepRole({ register, errors, control, watch, setValue }) {
           </Alert>
         )}
 
-        {lga && (wards.status === 'loading' || configured) && (
+        {lgaPostFilled && (
+          <Alert tone="warning" title={`The LGA Collation Officer post for ${lga} is already filled`}>
+            Each LGA has one LGA Collation Officer. If you were asked to serve here, contact the coordination team.
+          </Alert>
+        )}
+
+        {lga && level !== 'lga' && (wards.status === 'loading' || configured) && (
           <>
             <Controller control={control} name="wardCode" render={({ field }) => (
               <Combobox
@@ -409,7 +428,12 @@ function StepRole({ register, errors, control, watch, setValue }) {
                 error={errors.wardCode?.message}
               />
             )} />
-            {units.status === 'error' ? <LoadError what="polling unit" onRetry={units.retry} /> : (
+            {wardPostFilled && (
+              <Alert tone="warning" title="The Ward Collation Officer post for this ward is already filled">
+                Each ward has one Ward Collation Officer. If you were asked to serve here, contact the coordination team.
+              </Alert>
+            )}
+            {level === 'pollingUnit' && (units.status === 'error' ? <LoadError what="polling unit" onRetry={units.retry} /> : (
               <Controller control={control} name="pollingUnitCode" render={({ field }) => (
                 <Combobox
                   label="Polling unit"
@@ -430,7 +454,7 @@ function StepRole({ register, errors, control, watch, setValue }) {
                   error={errors.pollingUnitCode?.message}
                 />
               )} />
-            )}
+            ))}
             {positionFilled && (
               <Alert tone="warning" title={`The ${labelFor(AGENT_CATEGORIES, agentCategory)} position here is already filled`}>
                 Each polling unit has one Agent 1 and one Agent 2. Check that you chose the right agent type and polling unit. If you were asked to serve here, contact the coordination team.
@@ -445,7 +469,8 @@ function StepRole({ register, errors, control, watch, setValue }) {
             <p className="mt-0.5 text-sm text-slate-500">Filled in from the official INEC data as you choose.</p>
             <dl className="mt-3 grid gap-3 text-[15px] sm:grid-cols-2">
               <div><dt className="text-sm text-slate-500">Senatorial district</dt><dd className="font-medium text-ink">{titleCase(wards.data.senatorialDistrict)}</dd></div>
-              <div><dt className="text-sm text-slate-500">Polling unit code</dt><dd className="font-mono font-semibold text-ink">{pollingUnitCode || '–'}</dd></div>
+              {level === 'pollingUnit' && <div><dt className="text-sm text-slate-500">Polling unit code</dt><dd className="font-mono font-semibold text-ink">{pollingUnitCode || '–'}</dd></div>}
+              {level === 'ward' && <div><dt className="text-sm text-slate-500">Ward code</dt><dd className="font-mono font-semibold text-ink">{wardCode || '–'}</dd></div>}
             </dl>
           </section>
         )}
@@ -540,12 +565,12 @@ function StepReview({ values, files, errors, control, onEdit, cardNotice }) {
         ['Phone', values.phone],
         ['Origin', values.lgaOfOrigin && `${values.lgaOfOrigin}, ${stateLabel(values.stateOfOrigin)}`],
       ]} />
-      <ReviewSection title="Your role and polling unit" step={1} onEdit={onEdit} rows={[
-        ['Agent type', labelFor(AGENT_CATEGORIES, values.agentCategory)],
+      <ReviewSection title="Your role and location" step={1} onEdit={onEdit} rows={[
+        ['Role', labelFor(AGENT_CATEGORIES, values.agentCategory)],
         ['LGA', values.lga && `${values.lga}, Lagos State`],
-        ['Ward', values.ward && `${values.ward} (${values.wardCode})`],
-        ['Polling unit', values.pollingUnitName],
-        ['Polling unit code', values.pollingUnitCode],
+        ['Ward', levelOf(values.agentCategory) !== 'lga' && values.ward && `${values.ward} (${values.wardCode})`],
+        ['Polling unit', levelOf(values.agentCategory) === 'pollingUnit' && values.pollingUnitName],
+        ['Polling unit code', levelOf(values.agentCategory) === 'pollingUnit' && values.pollingUnitCode],
         ['Senatorial district', titleCase(values.senatorialDistrict)],
       ]} />
       <ReviewSection title="Identity and bank details" step={IDENTITY_STEP} onEdit={onEdit} rows={[

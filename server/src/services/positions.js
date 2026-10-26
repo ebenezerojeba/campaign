@@ -1,10 +1,13 @@
-// One Agent 1 and one Agent 2 per polling unit.
+// One holder per position:
+//   - an Agent 1 and an Agent 2 slot at each polling unit (13,325 units),
+//   - a Ward Collation Officer post for each ward (245),
+//   - an LGA Collation Officer post for each LGA (20).
 //
-// - A position is held by a Pending or Approved registration; Rejected and
-//   Cancelled registrations release it.
+// - A position is held by a Pending or Approved registration; Rejected,
+//   Cancelled and Revoked registrations release it.
 // - The holder is recorded in the `positions` collection under a unique _id,
 //   so two simultaneous claims can never both succeed.
-// - Registrations made before this rule existed are never changed: the first
+// - Registrations made before a rule existed are never changed: the first
 //   time a position is looked at, it goes to the rightful existing holder
 //   (an approved registration first, otherwise the earliest). Any others for
 //   the same position stay as they are and are listed as conflicts for review.
@@ -12,42 +15,60 @@ import mongoose from 'mongoose';
 import { env } from '../config/env.js';
 import { Agent } from '../models/Agent.js';
 import { Position } from '../models/Position.js';
-import { POSITION_CATEGORIES, POSITION_HOLDING_STATUSES } from '../../../shared/options.js';
+import { POSITION_CATEGORIES, POSITION_HOLDING_STATUSES, levelOf } from '../../../shared/options.js';
 
 // A claim made for a registration that is still being saved is respected for
 // this long even though the registration is not in the database yet.
 const PENDING_CLAIM_MS = 2 * 60 * 1000;
 
-export const positionKey = (pollingUnitCode, agentCategory) => `${pollingUnitCode}|${agentCategory}`;
-export const ruleApplies = (agentCategory, pollingUnitCode) => env.positionRule === 'on' && POSITION_CATEGORIES.includes(agentCategory) && Boolean(pollingUnitCode);
+// The position a registration is for: its _id in `positions`, and the query
+// that finds every registration competing for it. Null when no rule applies.
+// Polling-unit keys keep their original "<code>|<role>" form so existing
+// records stay valid.
+export function slotFor({ agentCategory, pollingUnitCode, wardCode, lga }) {
+  if (env.positionRule !== 'on' || !POSITION_CATEGORIES.includes(agentCategory)) return null;
+  const level = levelOf(agentCategory);
+  if (level === 'lga') return lga ? { key: `LGA:${lga}|${agentCategory}`, match: { agentCategory, lga }, level } : null;
+  if (level === 'ward') return wardCode ? { key: `WARD:${wardCode}|${agentCategory}`, match: { agentCategory, wardCode }, level } : null;
+  return pollingUnitCode ? { key: `${pollingUnitCode}|${agentCategory}`, match: { agentCategory, pollingUnitCode }, level } : null;
+}
+
+// Most officer posts allowed across the system (20 LGAs and 245 wards in the
+// official INEC data). With one post per location these can only be reached,
+// never passed; they are checked as well so a smaller limit can be set.
+export const OFFICER_CAPACITY = {
+  lga_collation_officer: Number(process.env.LGA_OFFICER_CAPACITY) || 20,
+  ward_collation_officer: Number(process.env.WARD_OFFICER_CAPACITY) || 245,
+};
+const KEY_PREFIX = { lga_collation_officer: '^LGA:', ward_collation_officer: '^WARD:' };
+
 const holds = (status) => POSITION_HOLDING_STATUSES.includes(status);
 const isDuplicate = (err) => err?.code === 11000;
 
 // The registration that should hold a position among those already saved.
-function rightfulHolder(pollingUnitCode, agentCategory) {
-  return Agent.findOne({ pollingUnitCode, agentCategory, status: { $in: POSITION_HOLDING_STATUSES } })
+function rightfulHolder(slot) {
+  return Agent.findOne({ ...slot.match, status: { $in: POSITION_HOLDING_STATUSES } })
     .sort({ status: 1, createdAt: 1 }) // 'approved' sorts before 'pending'
     .select('_id reference status')
     .lean();
 }
 
 // Returns the current holder ({ _id, reference }) or null when the position is free.
-export async function currentHolder(pollingUnitCode, agentCategory, now = new Date()) {
-  const key = positionKey(pollingUnitCode, agentCategory);
+export async function currentHolder(slot, now = new Date()) {
   for (let i = 0; i < 3; i += 1) {
-    const record = await Position.findById(key).lean();
+    const record = await Position.findById(slot.key).lean();
     if (record) {
       const holder = await Agent.findOne({ _id: record.agent, status: { $in: POSITION_HOLDING_STATUSES } }).select('_id reference status').lean();
       if (holder) return holder;
       // Held for a registration that is still being saved.
       if (now - record.since < PENDING_CLAIM_MS && !(await Agent.exists({ _id: record.agent }))) return { _id: record.agent, reference: null };
-      // The holder was rejected, cancelled or deleted: free the position.
-      await Position.deleteOne({ _id: key, agent: record.agent });
+      // The holder was rejected, cancelled, revoked or deleted: free the position.
+      await Position.deleteOne({ _id: slot.key, agent: record.agent });
     }
-    const rightful = await rightfulHolder(pollingUnitCode, agentCategory);
+    const rightful = await rightfulHolder(slot);
     if (!rightful) return null;
     try {
-      await Position.create({ _id: key, agent: rightful._id, since: now });
+      await Position.create({ _id: slot.key, agent: rightful._id, since: now });
       return rightful;
     } catch (err) {
       if (!isDuplicate(err)) throw err;
@@ -58,26 +79,31 @@ export async function currentHolder(pollingUnitCode, agentCategory, now = new Da
 }
 
 // Claims the position for `agentId`. Succeeds when the position is free or
-// already held by this registration. Returns { ok, created, holder }.
-export async function claimPosition(agentId, pollingUnitCode, agentCategory, now = new Date()) {
-  if (!ruleApplies(agentCategory, pollingUnitCode)) return { ok: true, created: false };
+// already held by this registration. Returns { ok, created, holder, reason }.
+export async function claimPosition(agentId, source, now = new Date()) {
+  const slot = slotFor(source);
+  if (!slot) return { ok: true, created: false };
   const id = new mongoose.Types.ObjectId(String(agentId));
-  const holder = await currentHolder(pollingUnitCode, agentCategory, now);
-  if (holder) return holder._id.equals(id) ? { ok: true, created: false } : { ok: false, holder };
+  const holder = await currentHolder(slot, now);
+  if (holder) return holder._id.equals(id) ? { ok: true, created: false } : { ok: false, reason: 'taken', holder };
+  const cap = OFFICER_CAPACITY[source.agentCategory];
+  if (cap && (await Position.countDocuments({ _id: { $regex: KEY_PREFIX[source.agentCategory] } })) >= cap) {
+    return { ok: false, reason: 'capacity' };
+  }
   try {
-    await Position.create({ _id: positionKey(pollingUnitCode, agentCategory), agent: id, since: now });
+    await Position.create({ _id: slot.key, agent: id, since: now });
     return { ok: true, created: true };
   } catch (err) {
     if (!isDuplicate(err)) throw err;
-    const record = await Position.findById(positionKey(pollingUnitCode, agentCategory)).lean();
-    return record?.agent?.equals(id) ? { ok: true, created: false } : { ok: false, holder: { _id: record?.agent, reference: null } };
+    const record = await Position.findById(slot.key).lean();
+    return record?.agent?.equals(id) ? { ok: true, created: false } : { ok: false, reason: 'taken', holder: { _id: record?.agent, reference: null } };
   }
 }
 
 // Gives the position up if this registration holds it.
-export async function releasePosition(agentId, pollingUnitCode, agentCategory) {
-  if (!pollingUnitCode || !agentCategory) return;
-  await Position.deleteOne({ _id: positionKey(pollingUnitCode, agentCategory), agent: agentId });
+export async function releasePosition(agentId, source) {
+  const slot = slotFor(source);
+  if (slot) await Position.deleteOne({ _id: slot.key, agent: agentId });
 }
 
 // Whether a status change keeps, needs or gives up a position.
@@ -88,11 +114,12 @@ export const positionEffect = (from, to) => {
   return 'none';
 };
 
-// Which positions in a ward are taken, for the public form: codes only, no people.
+// Which polling-unit agent positions in a ward are taken, for the public form:
+// codes only, no people.
 export async function takenPositions(lga, wardCode) {
   if (env.positionRule !== 'on') return {};
   const rows = await Agent.aggregate([
-    { $match: { lga, wardCode, agentCategory: { $in: POSITION_CATEGORIES }, status: { $in: POSITION_HOLDING_STATUSES } } },
+    { $match: { lga, wardCode, agentCategory: { $in: ['agent_1', 'agent_2'] }, status: { $in: POSITION_HOLDING_STATUSES } } },
     { $group: { _id: { pu: '$pollingUnitCode', c: '$agentCategory' } } },
   ]);
   const taken = {};
@@ -100,36 +127,70 @@ export async function takenPositions(lga, wardCode) {
   return taken;
 }
 
+// Which officer posts in an LGA are taken, for the public form: whether the
+// LGA post is filled and which wards' posts are, never who holds them.
+export async function takenOfficerPosts(lga) {
+  if (env.positionRule !== 'on') return { lgaOfficer: false, wardOfficers: [] };
+  const rows = await Agent.aggregate([
+    { $match: { lga, agentCategory: { $in: ['lga_collation_officer', 'ward_collation_officer'] }, status: { $in: POSITION_HOLDING_STATUSES } } },
+    { $group: { _id: { c: '$agentCategory', w: '$wardCode' } } },
+  ]);
+  return {
+    lgaOfficer: rows.some((r) => r._id.c === 'lga_collation_officer'),
+    wardOfficers: rows.filter((r) => r._id.c === 'ward_collation_officer' && r._id.w).map((r) => r._id.w),
+  };
+}
+
+// The grouping key used to find competing registrations in aggregations.
+const SLOT_GROUP = {
+  c: '$agentCategory',
+  loc: { $switch: {
+    branches: [
+      { case: { $eq: ['$agentCategory', 'lga_collation_officer'] }, then: '$lga' },
+      { case: { $eq: ['$agentCategory', 'ward_collation_officer'] }, then: '$wardCode' },
+    ],
+    default: '$pollingUnitCode',
+  } },
+};
+const keyOfGroup = (id, sample) => slotFor({ agentCategory: id.c, lga: sample.lga, wardCode: sample.wardCode, pollingUnitCode: sample.pollingUnitCode })?.key;
+
 // Positions with more than one Pending or Approved registration, for review.
-export async function positionConflicts({ limit = 500 } = {}) {
+// `categories` narrows it to some roles.
+export async function positionConflicts({ limit = 500, categories = POSITION_CATEGORIES } = {}) {
   const groups = await Agent.aggregate([
-    { $match: { agentCategory: { $in: POSITION_CATEGORIES }, status: { $in: POSITION_HOLDING_STATUSES } } },
+    { $match: { agentCategory: { $in: categories }, status: { $in: POSITION_HOLDING_STATUSES } } },
     { $sort: { status: 1, createdAt: 1 } },
     { $group: {
-      _id: { pu: '$pollingUnitCode', c: '$agentCategory' },
+      _id: SLOT_GROUP,
       count: { $sum: 1 },
       lga: { $first: '$lga' },
       ward: { $first: '$ward' },
+      wardCode: { $first: '$wardCode' },
       pollingUnit: { $first: '$pollingUnit' },
+      pollingUnitCode: { $first: '$pollingUnitCode' },
       registrations: { $push: { id: '$_id', reference: '$reference', firstName: '$firstName', lastName: '$lastName', status: '$status', createdAt: '$createdAt' } },
     } },
-    { $match: { count: { $gt: 1 } } },
-    { $sort: { lga: 1, '_id.pu': 1, '_id.c': 1 } },
+    { $match: { count: { $gt: 1 }, '_id.loc': { $nin: [null, ''] } } },
+    { $sort: { lga: 1, '_id.loc': 1, '_id.c': 1 } },
   ]);
-  const holders = new Map((await Position.find({ _id: { $in: groups.map((g) => positionKey(g._id.pu, g._id.c)) } }).lean()).map((p) => [p._id, String(p.agent)]));
+  const keys = groups.map((g) => keyOfGroup(g._id, g)).filter(Boolean);
+  const holders = new Map((await Position.find({ _id: { $in: keys } }).lean()).map((p) => [p._id, String(p.agent)]));
   return {
     total: groups.length,
     surplus: groups.reduce((t, g) => t + g.count - 1, 0),
     items: groups.slice(0, limit).map((g) => {
-      const held = holders.get(positionKey(g._id.pu, g._id.c));
+      const held = holders.get(keyOfGroup(g._id, g));
       // Before a position is first looked at, the rightful holder is the first in sort order.
       const holderId = held ?? String(g.registrations[0].id);
+      const level = levelOf(g._id.c);
       return {
-        pollingUnitCode: g._id.pu,
         agentCategory: g._id.c,
+        level,
         lga: g.lga,
-        ward: g.ward,
-        pollingUnit: g.pollingUnit,
+        ward: level === 'lga' ? undefined : g.ward,
+        wardCode: level === 'lga' ? undefined : g.wardCode,
+        pollingUnit: level === 'pollingUnit' ? g.pollingUnit : undefined,
+        pollingUnitCode: level === 'pollingUnit' ? g.pollingUnitCode : undefined,
         registrations: g.registrations.map((r) => ({ ...r, holder: String(r.id) === holderId })),
       };
     }),
@@ -138,9 +199,18 @@ export async function positionConflicts({ limit = 500 } = {}) {
 
 // The position a registration holds or is waiting for, for the admin detail page.
 export async function positionFor(agent) {
-  if (!ruleApplies(agent.agentCategory, agent.pollingUnitCode)) return null;
+  const slot = slotFor(agent);
+  if (!slot) return null;
   if (!holds(agent.status)) return { state: 'released' };
-  const holder = await currentHolder(agent.pollingUnitCode, agent.agentCategory);
+  const holder = await currentHolder(slot);
   if (holder && String(holder._id) === String(agent._id)) return { state: 'holder' };
   return { state: 'conflict', holderReference: holder?.reference ?? null, holderId: holder?._id ?? null };
+}
+
+// Whether this registration currently holds its position (officer access checks).
+export async function holdsPosition(agent) {
+  const slot = slotFor(agent);
+  if (!slot || !holds(agent.status)) return false;
+  const holder = await currentHolder(slot);
+  return Boolean(holder && String(holder._id) === String(agent._id));
 }

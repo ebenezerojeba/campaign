@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const { Schema } = mongoose;
 
-export const OUTBOX_TYPES = ['registration_confirmation', 'admin_alert', 'decision', 'admin_digest'];
+export const OUTBOX_TYPES = ['registration_confirmation', 'admin_alert', 'decision', 'admin_digest', 'officer_invite'];
 export const OUTBOX_STATUSES = ['queued', 'sending', 'sent', 'failed', 'cancelled'];
 
 // One queued email. Holds references and delivery state only: the message is
@@ -30,6 +30,7 @@ const outboxSchema = new Schema(
     correlationId: String,
     providerId: String,
     digest: { from: Date, to: Date }, // admin_digest only
+    user: { type: Schema.Types.ObjectId, ref: 'User' }, // officer_invite only
   },
   { timestamps: true },
 );

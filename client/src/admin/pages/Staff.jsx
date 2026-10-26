@@ -8,6 +8,7 @@ import { TextField, SelectField } from '../../components/ui/Field.jsx';
 import { Alert, Badge, Dialog, ErrorState, Skeleton } from '../../components/ui/Feedback.jsx';
 import { useToast } from '../../components/ui/Toast.jsx';
 import { formatDateTime } from '../../lib/format.js';
+import { accountRoleLabel } from '../../../../shared/options.js';
 
 const ROLES = [
   { value: 'reviewer', label: 'Reviewer: view and decide on applications' },
@@ -77,7 +78,7 @@ export default function Staff() {
                 {data.map((s) => (
                   <tr key={s.id}>
                     <td className={td}><span className="font-medium">{s.name}</span><span className="block text-xs text-slate-500">{s.email}</span></td>
-                    <td className={`${td} capitalize`}>{s.role}</td>
+                    <td className={td}>{accountRoleLabel(s.role)}{s.assignment ? <span className="block text-xs text-slate-500">{s.assignment.ward ? `${s.assignment.ward} ward, ` : ''}{s.assignment.lga} LGA</span> : null}</td>
                     <td className={`${td} text-slate-500`}>{s.lastLoginAt ? formatDateTime(s.lastLoginAt) : 'Never'}</td>
                     <td className={td}><Badge tone={s.active ? 'approved' : 'neutral'}>{s.active ? 'Active' : 'Deactivated'}</Badge></td>
                     <td className={`${td} text-right`}>{String(s.id) !== String(user.id) && <Button size="sm" variant={s.active ? 'dangerSoft' : 'secondary'} onClick={() => toggle(s)}>{s.active ? 'Deactivate' : 'Reactivate'}</Button>}</td>

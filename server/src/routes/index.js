@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import * as pub from '../controllers/public.controller.js';
 import * as admin from '../controllers/admin.controller.js';
+import * as officer from '../controllers/officer.controller.js';
+import * as reports from '../controllers/reports.controller.js';
 import {
   validate, validObjectId, requireDb, requireStaff, requirePermission, csrfGuard, sanitizeBody, limits,
 } from '../middleware/index.js';
@@ -33,12 +35,27 @@ export const adminRouter = Router();
 adminRouter.use(csrfGuard, requireDb);
 adminRouter.post('/auth/login', limits.login, validate(v.loginSchema), admin.login);
 adminRouter.post('/auth/logout', admin.logout);
+// From the emailed one-time link (no session yet).
+adminRouter.post('/auth/set-password', limits.login, validate(v.setPasswordSchema), officer.setPassword);
 
 adminRouter.use(requireStaff);
 const can = requirePermission;
 adminRouter.get('/auth/me', admin.me);
 adminRouter.post('/auth/password', limits.login, validate(v.passwordChangeSchema), admin.changePassword);
 adminRouter.get('/positions/conflicts', can('agents:read'), admin.listPositionConflicts);
+
+// Collation officers (admin side).
+adminRouter.get('/officers/posts', can('agents:read'), admin.listOfficerPosts);
+adminRouter.post('/agents/:id/officer-access', id, can('officers:manage'), admin.grantOfficerDashboard);
+adminRouter.post('/agents/:id/officer-access/invite', id, can('officers:manage'), admin.resendOfficerInvite);
+
+// Reports and downloads centre.
+adminRouter.get('/reports', can('reports:export'), reports.listReports);
+adminRouter.get('/reports/:type', can('reports:export'), limits.export, validate(v.reportQuerySchema, 'query'), reports.downloadReport);
+
+// Collation officer dashboard: scoped to the signed-in officer's own assignment.
+adminRouter.get('/officer/dashboard', can('officer:dashboard'), officer.requireAssignment, officer.officerDashboard);
+adminRouter.get('/officer/report', can('officer:dashboard'), officer.requireAssignment, limits.export, validate(v.officerReportQuerySchema, 'query'), officer.officerReport);
 adminRouter.get('/dashboard', can('agents:read'), admin.dashboard);
 
 adminRouter.get('/agents', can('agents:read'), validate(v.agentQuerySchema, 'query'), admin.listAgents);
