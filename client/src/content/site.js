@@ -25,7 +25,7 @@ export const site = {
 
   hero: {
     headline: ['Your polling unit.', 'Your ward.', 'Your Lagos.'],
-    body: 'Register for the role you have been asked to serve in: Agent 1 or Agent 2 at a polling unit, Ward Collation Officer for a ward, or LGA Collation Officer for an LGA. It takes about ten minutes on a phone.',
+    body: 'Register for the role you have been asked to serve in: Agent 1 or Agent 2 at a polling unit, Ward Collation Officer for a ward (each ward has two), or LGA Collation Officer for an LGA. It takes about ten minutes on a phone.',
     primary: 'Start registration',
     secondary: 'See what you need',
   },
@@ -46,8 +46,8 @@ export const site = {
 
   faq: [
     { q: 'Who can register?', a: 'Anyone with a valid voter’s card who has been asked to serve in Lagos State as Agent 1 or Agent 2 at a polling unit, as a Ward Collation Officer or as an LGA Collation Officer.' },
-    { q: 'Which role should I choose?', a: 'The role you have been asked to serve in. Agent 1 and Agent 2 serve at one polling unit; a Ward Collation Officer covers one ward; an LGA Collation Officer covers one LGA. If you are not sure, ask the coordination team before you register.' },
-    { q: 'Why does the form say a position is already filled?', a: 'Each polling unit has one Agent 1 and one Agent 2 position, each ward one Ward Collation Officer position, and each LGA one LGA Collation Officer position. A position is filled while a registration for it is pending review or approved. If you were asked to serve in a position that shows as filled, contact the coordination team.' },
+    { q: 'Which role should I choose?', a: 'The role you have been asked to serve in. Agent 1 and Agent 2 serve at one polling unit; Ward Collation Officers cover one ward (two per ward); an LGA Collation Officer covers one LGA. If you are not sure, ask the coordination team before you register.' },
+    { q: 'Why does the form say a position is already filled?', a: 'Each polling unit has one Agent 1 and one Agent 2 position, each ward two Ward Collation Officer positions, and each LGA one LGA Collation Officer position. A position is filled while a registration for it is pending review or approved. If you were asked to serve in a position that shows as filled, contact the coordination team.' },
     { q: 'Why do you need my NIN, VIN and bank details?', a: 'Your NIN, VIN and APC party registration number confirm your identity, voter registration and party membership. Your bank details are used only to pay any allowance due to you. They are encrypted, and only authorised administrators can see them. The form checks their format; it does not verify them with NIMC, INEC, APC or your bank.' },
     { q: 'Why do you need my voter’s card?', a: 'To confirm that you are a registered voter and to check it against the location you chose. Only authorised staff can see it.' },
     { q: 'Does the upload check prove my card is genuine?', a: 'No. The system checks that each file is a real, complete image or PDF of a sensible size, and rejects files that are not. Staff then check the card itself. A file passing the upload checks does not mean the card has been verified.' },
@@ -58,7 +58,7 @@ export const site = {
 };
 
 export const privacyNotice = {
-  version: '2026-10-v5',
+  version: '2026-10-v6',
   summary: [
     'We use your details, passport photograph and voter’s card to register and verify you in the role you chose (Agent 1, Agent 2, Ward Collation Officer or LGA Collation Officer) and to contact you about it.',
     'Your NIN, VIN and APC party registration number confirm your identity, voter registration and party membership. Your bank details are used only to pay any allowance due to you. All of them are encrypted, and only authorised administrators can see them in full.',

@@ -92,7 +92,7 @@ export const DOCUMENT_KINDS = [
 
 // Changes whenever the privacy notice wording changes, so each consent record
 // shows which version the person agreed to.
-export const PRIVACY_NOTICE_VERSION = '2026-10-v5';
+export const PRIVACY_NOTICE_VERSION = '2026-10-v6';
 
 export const labelFor = (list, value) => list.find((o) => o.value === value)?.label ?? value;
 export const valuesOf = (list) => list.map((o) => o.value);

@@ -27,7 +27,7 @@ function Privacy() {
         <p>We do not ask for your home address, bank card details or PINs, passwords, location from your device, or information about your religion or ethnicity. Photo location data (GPS) is removed from JPEG images when they are uploaded.</p>
       </Section>
       <Section title="Why we use it, and on what basis">
-        <p>To register you in the role you chose, verify that you are a registered voter, contact you about your registration, and coordinate one person per position (one Agent 1 and one Agent 2 per polling unit, one Ward Collation Officer per ward and one LGA Collation Officer per LGA).</p>
+        <p>To register you in the role you chose, verify that you are a registered voter, contact you about your registration, and coordinate one person per position (one Agent 1 and one Agent 2 per polling unit, two Ward Collation Officers per ward and one LGA Collation Officer per LGA).</p>
         <p>Your NIN, VIN and APC party registration number are used to confirm your identity, voter registration and party membership. Your bank details are used only to pay any allowance due to you for your role.</p>
         <p>We rely on your explicit consent, which you give separately for your documents and for your identification and bank details when you submit the form. You can withdraw it at any time.</p>
       </Section>

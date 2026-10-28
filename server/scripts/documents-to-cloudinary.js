@@ -75,9 +75,20 @@ async function copy({ id, kind, d }) {
 }
 
 async function removeGridFs({ id, kind, d }) {
-  // Download both copies and compare them byte for byte before deleting the database copy.
-  const [cloudBytes, dbBytes] = await Promise.all([docs.readDocument({ cloudinary: d.cloudinary }), docs.readDocument({ fileId: d.fileId })]);
-  if (!cloudBytes.length || sha256(cloudBytes) !== sha256(dbBytes)) { tally.mismatched += 1; console.error(`[keep] ${id} ${kind}: Cloudinary copy does not match; GridFS copy kept`); return; }
+  // Before deleting the database copy, prove Cloudinary holds the same bytes.
+  // When the copy's MD5 was recorded (checked against these bytes at copy
+  // time), compare Cloudinary's MD5 and size with the database copy without
+  // downloading it; otherwise download both and compare them in full.
+  const dbBytes = await docs.readDocument({ fileId: d.fileId });
+  let same;
+  if (d.cloudinary.md5) {
+    const info = await cloud.headInfo(d.cloudinary);
+    same = info.md5 === d.cloudinary.md5 && info.md5 === md5(dbBytes) && info.bytes === dbBytes.length;
+  } else {
+    const cloudBytes = await docs.readDocument({ cloudinary: d.cloudinary });
+    same = cloudBytes.length > 0 && sha256(cloudBytes) === sha256(dbBytes);
+  }
+  if (!dbBytes.length || !same) { tally.mismatched += 1; console.error(`[keep] ${id} ${kind}: Cloudinary copy does not match; GridFS copy kept`); return; }
   const res = await Agent.updateOne({ _id: id, [`documents.${kind}.fileId`]: d.fileId, [`documents.${kind}.cloudinary.publicId`]: d.cloudinary.publicId }, { $unset: { [`documents.${kind}.fileId`]: 1 } });
   if (res.modifiedCount === 1) { await docs.deleteGridFsFile(d.fileId); tally.done += 1; }
 }

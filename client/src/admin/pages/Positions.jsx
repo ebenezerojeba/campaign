@@ -18,10 +18,10 @@ export default function Positions() {
     <>
       <PageHeader
         title="Contested positions"
-        description="Each polling unit has one Agent 1 and one Agent 2 position, each ward one Ward Collation Officer and each LGA one LGA Collation Officer. These positions have more than one active registration from before the rule was introduced. The first registration listed holds the position; decline or cancel the others, or the holder, to settle it."
+        description="Each polling unit has one Agent 1 and one Agent 2 position, each ward two Ward Collation Officer positions and each LGA one LGA Collation Officer. These locations have more active registrations than positions, from before the rule was introduced. The registrations marked “Holds position” keep it; decline or cancel the others, or the holder, to settle it."
       />
       {error ? <ErrorState error={error} onRetry={reload} /> : loading ? <Skeleton className="h-64" /> : data.total === 0 ? (
-        <EmptyState icon={MapPinned} title="No contested positions">Every polling-unit position has at most one active registration.</EmptyState>
+        <EmptyState icon={MapPinned} title="No contested positions">No location has more active registrations than positions.</EmptyState>
       ) : (
         <>
           <p className="mb-4 text-[15px] text-slate-600">

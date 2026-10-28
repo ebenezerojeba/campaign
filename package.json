@@ -20,7 +20,8 @@
     "create-admin": "node server/scripts/create-admin.js",
     "email:check": "node server/scripts/check-email.js",
     "email:recover": "node server/scripts/email-recover.js",
-    "docs:move": "node server/scripts/documents-to-cloudinary.js"
+    "docs:move": "node server/scripts/documents-to-cloudinary.js",
+    "docs:orphans": "node server/scripts/cloudinary-orphans.js"
   },
   "devDependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",

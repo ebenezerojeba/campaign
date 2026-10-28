@@ -63,7 +63,7 @@ export async function upload(buffer, { kind, contentType, ext }) {
   return { publicId: result.public_id, resourceType, version: result.version, format: result.format, md5: result.etag };
 }
 
-const signedUrl = (asset) => sdk.url(asset.publicId, {
+export const signedUrl = (asset) => sdk.url(asset.publicId, {
   type: 'authenticated',
   resource_type: asset.resourceType,
   sign_url: true,
@@ -78,6 +78,14 @@ export async function download(asset) {
   const res = await sdk.fetch(signedUrl(asset), { signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (!res.ok) throw Object.assign(new Error(`Cloudinary returned ${res.status}`), { status: res.status });
   return Readable.fromWeb(res.body);
+}
+
+// The stored file's fingerprint (MD5 ETag) and size, without downloading it.
+export async function headInfo(asset) {
+  if (!enabled()) throw new Error('Cloudinary is not configured');
+  const res = await sdk.fetch(signedUrl(asset), { method: 'HEAD', signal: AbortSignal.timeout(TIMEOUT_MS) });
+  if (!res.ok) throw Object.assign(new Error(`Cloudinary returned ${res.status}`), { status: res.status });
+  return { md5: (res.headers.get('etag') ?? '').replace(/^W\//, '').replace(/"/g, ''), bytes: Number(res.headers.get('content-length')) };
 }
 
 export async function destroy(asset) {

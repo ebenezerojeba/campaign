@@ -348,7 +348,7 @@ function StepRole({ register, errors, control, watch, setValue }) {
   useEffect(() => { setValue('electoralRequired', required); }, [required, setValue]);
   useEffect(() => { setValue('senatorialDistrict', configured ? wards.data.senatorialDistrict : ''); }, [configured, wards.data, setValue]);
 
-  const wardOptions = configured ? wards.data.wards.map((w) => ({ value: w.code, label: w.name, description: `${w.code}${level === 'ward' && officerPosts?.wardOfficers?.includes(w.code) ? ' · officer post filled' : ''}` })) : [];
+  const wardOptions = configured ? wards.data.wards.map((w) => ({ value: w.code, label: w.name, description: `${w.code}${level === 'ward' && officerPosts?.wardOfficerCounts?.[w.code] ? ` · ${officerPosts.wardOfficerCounts[w.code]} of 2 officer positions filled` : ''}` })) : [];
   // Shows which agent positions are already filled at each polling unit.
   const filledNote = (taken = []) => (taken.length >= 2 ? ' · both agents filled' : taken.length ? ` · ${labelFor(AGENT_CATEGORIES, taken[0])} filled` : '');
   const unitOptions = units.status === 'ready' ? units.data.map((u) => ({ value: u.code, label: u.name, description: `${u.code.slice(-3)}${filledNote(u.taken)}` })) : [];
@@ -429,8 +429,8 @@ function StepRole({ register, errors, control, watch, setValue }) {
               />
             )} />
             {wardPostFilled && (
-              <Alert tone="warning" title="The Ward Collation Officer post for this ward is already filled">
-                Each ward has one Ward Collation Officer. If you were asked to serve here, contact the coordination team.
+              <Alert tone="warning" title="Both Ward Collation Officer positions for this ward are filled">
+                Each ward has two Ward Collation Officer positions. If you were asked to serve here, contact the coordination team.
               </Alert>
             )}
             {level === 'pollingUnit' && (units.status === 'error' ? <LoadError what="polling unit" onRetry={units.retry} /> : (

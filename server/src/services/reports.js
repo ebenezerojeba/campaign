@@ -15,6 +15,9 @@ import { LGA_NAMES } from '../../../shared/lagos.js';
 import { wardsFor, pollingUnitsFor } from './electoral.js';
 import { officerPosts } from './officerPosts.js';
 import { positionConflicts } from './positions.js';
+
+// "1 of 2 filled (1 approved)" for a ward's Ward Collation Officer positions.
+const wardOfficerText = (o) => `${o.filled} of ${o.seats} filled${o.filled ? ` (${o.approved} approved)` : ''}${o.contested ? ', contested' : ''}`;
 import { lgaDashboard, wardDashboard } from './officers.js';
 
 export const MAX_ROWS = 30000;
@@ -23,10 +26,10 @@ export const REPORTS = [
   { id: 'summary', title: 'Overall registration summary', description: 'Registrations by role and status, and by LGA.', filters: ['from', 'to'] },
   { id: 'registrations', title: 'Registrations list', description: 'One row per registration with contact and location details. No identity, bank or document data.', filters: ['role', 'lga', 'wardCode', 'status', 'from', 'to'] },
   { id: 'lga-officers', title: 'LGA Collation Officer assignments', description: 'All 20 LGA Collation Officer positions: who fills each, the registration status and dashboard access.', filters: ['lga'] },
-  { id: 'ward-officers', title: 'Ward Collation Officer assignments', description: 'All 245 Ward Collation Officer positions: who fills each, the registration status and dashboard access.', filters: ['lga', 'wardCode'] },
+  { id: 'ward-officers', title: 'Ward Collation Officer assignments', description: 'All 490 Ward Collation Officer positions (two per ward): who fills each, the registration status and dashboard access.', filters: ['lga', 'wardCode'] },
   { id: 'vacancies', title: 'Filled and vacant positions', description: 'Collation officer positions, and Agent 1 and Agent 2 positions at every polling unit.', filters: ['lga', 'wardCode'] },
   { id: 'status', title: 'Registration status report', description: 'Counts by status for each role in each LGA.', filters: ['role', 'from', 'to'] },
-  { id: 'lga-ward', title: 'LGA and ward summary', description: 'Per ward: polling units, Agent 1 and Agent 2 positions filled and vacant, and the Ward Collation Officer position.', filters: ['lga'] },
+  { id: 'lga-ward', title: 'LGA and ward summary', description: 'Per ward: polling units, Agent 1 and Agent 2 positions filled and vacant, and the two Ward Collation Officer positions.', filters: ['lga'] },
   { id: 'conflicts', title: 'Assignment conflict report', description: 'Positions with more than one active registration, for review. Nothing is changed automatically.', filters: ['role', 'lga'] },
 ];
 export const reportById = (id) => REPORTS.find((r) => r.id === id);
@@ -278,7 +281,7 @@ const builders = {
     for (const lga of lgas) dashboards.push(await lgaDashboard({ lga }));
     const posts = await officerPosts();
     const lgaPost = new Map(posts.lga.posts.map((p) => [p.lga, p.status]));
-    const wardRows = dashboards.flatMap((d) => d.wards.map((wd) => ({ lga: d.assignment.lga, ...wd, wardOfficer: statusLabel(wd.wardOfficer.status) })));
+    const wardRows = dashboards.flatMap((d) => d.wards.map((wd) => ({ lga: d.assignment.lga, ...wd, wardOfficer: wardOfficerText(wd.wardOfficer) })));
     const lgaRows = dashboards.map((d) => ({ lga: d.assignment.lga, ...d.totals, lgaOfficer: statusLabel(lgaPost.get(d.assignment.lga) ?? 'vacant') }));
     const cols = [{ header: 'Polling units', key: 'pollingUnits' }, { header: 'Agent 1 and Agent 2 positions', key: 'agentPositions' }, { header: 'Filled', key: 'filled' }, { header: 'Approved', key: 'approved' }, { header: 'Vacant', key: 'vacant' }];
     return {
@@ -286,7 +289,7 @@ const builders = {
       async run(w) {
         const a = w.sheet('LGAs', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Wards', key: 'wards' }, ...cols, { header: 'Ward Collation Officer positions filled', key: 'wardOfficersFilled', width: 22 }, { header: 'LGA Collation Officer position', key: 'lgaOfficer', width: 16 }]);
         lgaRows.forEach((r) => a.add(r)); a.end();
-        const b = w.sheet('Wards', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Ward', key: 'name', width: 26 }, { header: 'Ward code', key: 'code', width: 11 }, ...cols, { header: 'Ward Collation Officer position', key: 'wardOfficer', width: 16 }]);
+        const b = w.sheet('Wards', [{ header: 'LGA', key: 'lga', width: 20 }, { header: 'Ward', key: 'name', width: 26 }, { header: 'Ward code', key: 'code', width: 11 }, ...cols, { header: 'Ward Collation Officer positions', key: 'wardOfficer', width: 26 }]);
         wardRows.forEach((r) => b.add(r)); b.end();
       },
     };
@@ -362,8 +365,8 @@ export async function streamOfficerReport(res, assignment, format, user) {
   const w = writerFor(res, format);
   await w.begin(meta);
   if (assignment.level === 'lga') {
-    const s = w.sheet('Wards', [{ header: 'Ward', key: 'name', width: 26 }, { header: 'Ward code', key: 'code', width: 11 }, { header: 'Polling units', key: 'pollingUnits' }, { header: 'Agent 1 and Agent 2 positions', key: 'agentPositions' }, { header: 'Filled', key: 'filled' }, { header: 'Approved', key: 'approved' }, { header: 'Vacant', key: 'vacant' }, { header: 'Ward Collation Officer position', key: 'wardOfficer', width: 16 }]);
-    for (const r of rows) s.add({ ...r, wardOfficer: statusLabel(r.wardOfficer.status) });
+    const s = w.sheet('Wards', [{ header: 'Ward', key: 'name', width: 26 }, { header: 'Ward code', key: 'code', width: 11 }, { header: 'Polling units', key: 'pollingUnits' }, { header: 'Agent 1 and Agent 2 positions', key: 'agentPositions' }, { header: 'Filled', key: 'filled' }, { header: 'Approved', key: 'approved' }, { header: 'Vacant', key: 'vacant' }, { header: 'Ward Collation Officer positions', key: 'wardOfficer', width: 26 }]);
+    for (const r of rows) s.add({ ...r, wardOfficer: wardOfficerText(r.wardOfficer) });
     s.end();
   } else {
     const s = w.sheet('Polling units', [{ header: 'Polling unit code', key: 'code', width: 16 }, { header: 'Polling unit', key: 'name', width: 40 }, { header: 'Agent 1', key: 'a1', width: 14 }, { header: 'Agent 2', key: 'a2', width: 14 }]);

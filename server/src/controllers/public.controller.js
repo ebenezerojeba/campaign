@@ -88,7 +88,9 @@ const CAPTCHA_MESSAGE = 'Complete the security check and try again.';
 const POSITION_PLACE = { pollingUnit: 'at this polling unit', ward: 'for this ward', lga: 'for this LGA' };
 const positionTakenMessage = (category, reason) => (reason === 'capacity'
   ? `All ${labelFor(AGENT_CATEGORIES, category)} positions have been filled. Contact the coordination team if you were asked to serve.`
-  : `The ${labelFor(AGENT_CATEGORIES, category)} position ${POSITION_PLACE[levelOf(category)]} has already been filled. Check your role and location, or contact the coordination team if you were asked to serve here.`);
+  : category === 'ward_collation_officer'
+    ? 'Both Ward Collation Officer positions for this ward have already been filled. Check your role and location, or contact one of the admins for further assistance.'
+    : `The ${labelFor(AGENT_CATEGORIES, category)} position ${POSITION_PLACE[levelOf(category)]} has already been filled. Check your role and location, or contact one of the admins for further assistance.`);
 
 const fieldErrors = (fields) => new ApiError(422, 'VALIDATION_FAILED', 'Some details need attention', { fields });
 

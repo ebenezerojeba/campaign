@@ -135,12 +135,15 @@ beforeEach(async () => {
   await Promise.all([Agent.deleteMany({}), Position.deleteMany({}), EmailOutbox.deleteMany({}), User.deleteMany({ role: { $in: ['lga_officer', 'ward_officer'] } }), mongoose.connection.db.collection('ratelimits').deleteMany({})]);
 });
 
-test('the official data has exactly 20 LGAs and 245 wards, matching the requested posts', () => {
+test('the official data has exactly 20 LGAs and 245 wards: 20 LGA and 490 Ward Collation Officer positions', () => {
   const loc = officerPostsSvc.officerLocations();
   assert.equal(loc.lgaCount, 20);
   assert.equal(loc.wardCount, 245);
   assert.equal(positions.OFFICER_CAPACITY.lga_collation_officer, 20);
-  assert.equal(positions.OFFICER_CAPACITY.ward_collation_officer, 245);
+  assert.equal(positions.OFFICER_CAPACITY.ward_collation_officer, 490);
+  assert.equal(positions.seatsFor('ward_collation_officer'), 2);
+  assert.equal(positions.seatsFor('lga_collation_officer'), 1);
+  assert.equal(positions.seatsFor('agent_1'), 1);
 });
 
 test('all four roles register; officers give only the location their role needs', async () => {
@@ -164,7 +167,7 @@ test('a ward officer must choose a ward, and it must belong to the chosen LGA', 
   assert.match(fieldsOf(wrongLga).wardCode, /Surulere/);
 });
 
-test('one officer per LGA and per ward; the post is free again after a decline', async () => {
+test('one officer per LGA and two per ward; a position is free again after a decline', async () => {
   assert.equal((await register(registration())).status, 201);
   const second = await register(registration());
   assert.equal(second.status, 422);
@@ -173,17 +176,21 @@ test('one officer per LGA and per ward; the post is free again after a decline',
 
   const w1 = await register(registration({ agentCategory: 'ward_collation_officer', wardCode: '20-05' }));
   assert.equal(w1.status, 201);
-  const w2 = await register(registration({ agentCategory: 'ward_collation_officer', wardCode: '20-05' }));
-  assert.match(fieldsOf(w2).agentCategory, /Ward Collation Officer position for this ward has already been filled/);
+  assert.equal((await register(registration({ agentCategory: 'ward_collation_officer', wardCode: '20-05' }))).status, 201, 'a ward has a second position');
+  const w3 = await register(registration({ agentCategory: 'ward_collation_officer', wardCode: '20-05' }));
+  assert.equal(w3.status, 422);
+  assert.match(fieldsOf(w3).agentCategory, /Both Ward Collation Officer positions for this ward have already been filled/);
   const id = (await agentFor(w1))._id;
   assert.equal((await admin.patch(`/api/admin/agents/${id}/status`).set(fetchHeader).send({ status: 'rejected', notify: false })).status, 200);
   assert.equal((await register(registration({ agentCategory: 'ward_collation_officer', wardCode: '20-05' }))).status, 201);
 });
 
-test('simultaneous claims for one post: exactly one succeeds', async () => {
-  const results = await Promise.all(Array.from({ length: 12 }, () => register(registration({ agentCategory: 'ward_collation_officer', wardCode: '20-06' }))));
-  assert.equal(results.filter((r) => r.status === 201).length, 1, results.map((r) => r.status).join(','));
-  assert.equal(await Agent.countDocuments({ agentCategory: 'ward_collation_officer', wardCode: '20-06' }), 1);
+test('simultaneous claims: exactly two succeed for a ward, exactly one for an LGA', async () => {
+  const ward = await Promise.all(Array.from({ length: 12 }, () => register(registration({ agentCategory: 'ward_collation_officer', wardCode: '20-06' }))));
+  assert.equal(ward.filter((r) => r.status === 201).length, 2, ward.map((r) => r.status).join(','));
+  assert.equal(await Agent.countDocuments({ agentCategory: 'ward_collation_officer', wardCode: '20-06' }), 2);
+  const lga = await Promise.all(Array.from({ length: 8 }, () => register(registration({ lga: 'Eti-Osa' }))));
+  assert.equal(lga.filter((r) => r.status === 201).length, 1, lga.map((r) => r.status).join(','));
 });
 
 test('the total number of officer posts is capped', async () => {
@@ -311,7 +318,7 @@ test('reports: every type downloads as a valid Excel file and CSV, with filters 
   const header = regs.Registrations[0].join(' ');
   for (const banned of ['NIN', 'VIN', 'Account', 'Bank', 'party']) assert.ok(!header.includes(banned), `no ${banned} column`);
   const officers = await readXlsx((await admin.get('/api/admin/reports/ward-officers').buffer(true).parse(binary)).body);
-  assert.equal(officers['Ward positions'].length, 1 + 245);
+  assert.equal(officers['Ward positions'].length, 1 + 490, 'two rows per ward');
 });
 
 test('spreadsheet formula injection is neutralised in Excel and CSV', async () => {
@@ -344,16 +351,24 @@ test('existing duplicate officer registrations are reported for review, never ch
   // Saved directly, as if made before the rule.
   const base = { stateOfOrigin: 'Oyo', lgaOfOrigin: 'Ibadan North', agentCategory: 'ward_collation_officer', lga: 'Surulere', ward: 'W', wardCode: '20-10', consent: { processing: true, sensitiveData: true, declarationAccurate: true } };
   await Agent.create({ ...base, reference: 'LAG-DUPL-ONE1', firstName: 'First', lastName: 'Holder', email: 'd1@example.com', phone: '+2348050000001', createdAt: new Date('2026-10-01') });
-  await Agent.create({ ...base, reference: 'LAG-DUPL-TWO2', firstName: 'Second', lastName: 'Waiting', email: 'd2@example.com', phone: '+2348050000002', createdAt: new Date('2026-10-02') });
-  const posts = (await admin.get('/api/admin/officers/posts')).body.data;
-  const post = posts.ward.posts.find((p) => p.wardCode === '20-10');
-  assert.deepEqual([post.contested, post.competing, post.holder.reference], [true, 2, 'LAG-DUPL-ONE1']);
+  await Agent.create({ ...base, reference: 'LAG-DUPL-TWO2', firstName: 'Second', lastName: 'Holder', email: 'd2@example.com', phone: '+2348050000002', createdAt: new Date('2026-10-02') });
+  // Two registrations fit a ward's two positions: not a conflict.
+  let posts = (await admin.get('/api/admin/officers/posts')).body.data;
+  assert.equal(posts.ward.contested, 0);
+  await Agent.create({ ...base, reference: 'LAG-DUPL-THR3', firstName: 'Third', lastName: 'Waiting', email: 'd3@example.com', phone: '+2348050000003', createdAt: new Date('2026-10-03') });
+  posts = (await admin.get('/api/admin/officers/posts')).body.data;
+  const seats = posts.ward.posts.filter((p) => p.wardCode === '20-10');
+  assert.deepEqual(seats.map((p) => [p.seat, p.holder.reference, p.contested, p.competing]), [[1, 'LAG-DUPL-ONE1', true, 3], [2, 'LAG-DUPL-TWO2', true, 3]]);
   assert.equal(posts.ward.contested, 1);
   const conflicts = (await admin.get('/api/admin/positions/conflicts')).body.data;
-  assert.equal(conflicts.items.find((i) => i.wardCode === '20-10').registrations.length, 2);
+  const item = conflicts.items.find((i) => i.wardCode === '20-10');
+  assert.deepEqual(item.registrations.map((r) => [r.reference, r.holder]), [['LAG-DUPL-ONE1', true], ['LAG-DUPL-TWO2', true], ['LAG-DUPL-THR3', false]]);
+  assert.equal(conflicts.surplus, 1);
   const book = await readXlsx((await admin.get('/api/admin/reports/conflicts').buffer(true).parse(binary)).body);
-  assert.equal(book.Conflicts.length, 3);
-  assert.equal(await Agent.countDocuments({ wardCode: '20-10', status: 'pending' }), 2, 'nothing changed');
+  assert.equal(book.Conflicts.length, 4);
+  // A new applicant for the full ward is refused; the third waits for review.
+  assert.equal((await register(registration({ agentCategory: 'ward_collation_officer', wardCode: '20-10' }))).status, 422);
+  assert.equal(await Agent.countDocuments({ wardCode: '20-10', status: 'pending' }), 3, 'nothing changed');
 });
 
 test('admin dashboard shows filled and vacant officer posts', async () => {
@@ -361,7 +376,7 @@ test('admin dashboard shows filled and vacant officer posts', async () => {
   await register(registration({ agentCategory: 'ward_collation_officer', lga: 'Badagry', wardCode: '06-01' }));
   const d = (await admin.get('/api/admin/dashboard')).body.data;
   assert.deepEqual([d.officerPosts.lga.capacity, d.officerPosts.lga.filled, d.officerPosts.lga.vacant, d.officerPosts.lga.reconciled], [20, 1, 19, true]);
-  assert.deepEqual([d.officerPosts.ward.capacity, d.officerPosts.ward.filled, d.officerPosts.ward.vacant], [245, 1, 244]);
+  assert.deepEqual([d.officerPosts.ward.capacity, d.officerPosts.ward.filled, d.officerPosts.ward.vacant, d.officerPosts.ward.reconciled], [490, 1, 489, true]);
 });
 
 test('approving an officer gives dashboard access and sends one invitation; a problem never undoes the approval', async () => {
@@ -404,4 +419,27 @@ test('revoking an assignment emails the person; cancelling does not', async () =
   assert.equal((await admin.patch(`/api/admin/agents/${other._id}/status`).set(fetchHeader).send({ status: 'cancelled', notify: true })).status, 200);
   await outbox.drainOutbox({ max: 20, now: () => new Date(Date.now() + 60e3) });
   assert.equal(sent.filter((m) => m.to === other.email && /Update/.test(m.subject)).length, 0, 'no email for a cancellation');
+});
+
+test('both Ward Collation Officers of a ward get their own dashboard; revoking one frees a position', async () => {
+  const a = await agentFor(await register(registration({ agentCategory: 'ward_collation_officer', lga: 'Apapa', wardCode: '05-01' })));
+  const b = await agentFor(await register(registration({ agentCategory: 'ward_collation_officer', lga: 'Apapa', wardCode: '05-01' })));
+  await approve(admin, a._id);
+  const first = await officerSession(admin, a._id, a.email);
+  await approve(admin, b._id);
+  const second = await officerSession(admin, b._id, b.email);
+  for (const { session } of [first, second]) {
+    const d = (await session.get('/api/admin/officer/dashboard')).body.data;
+    assert.equal(d.assignment.wardCode, '05-01');
+  }
+  // The LGA officer sees "2 of 2 filled" for that ward.
+  const lgaOff = await agentFor(await register(registration({ lga: 'Apapa' })));
+  await approve(admin, lgaOff._id);
+  const lgaSession = (await officerSession(admin, lgaOff._id, lgaOff.email)).session;
+  const ward = (await lgaSession.get('/api/admin/officer/dashboard')).body.data.wards.find((w) => w.code === '05-01');
+  assert.deepEqual([ward.wardOfficer.filled, ward.wardOfficer.approved, ward.wardOfficer.seats], [2, 2, 2]);
+  // Revoking one frees a position for someone new; the other keeps access.
+  assert.equal((await admin.patch(`/api/admin/agents/${a._id}/status`).set(fetchHeader).send({ status: 'revoked', notify: false })).status, 200);
+  assert.equal((await second.session.get('/api/admin/officer/dashboard')).status, 200);
+  assert.equal((await register(registration({ agentCategory: 'ward_collation_officer', lga: 'Apapa', wardCode: '05-01' }))).status, 201);
 });

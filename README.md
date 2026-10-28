@@ -1,6 +1,6 @@
 # APC Lagos Digital Management System
 
-Registration and management for APC Lagos Agent 1, Agent 2, Ward Collation Officers and LGA Collation Officers: document upload, one person per position, separate dashboards for staff and collation officers, and a reports and downloads centre. Live at https://www.apclagos.org.
+Registration and management for APC Lagos Agent 1, Agent 2, Ward Collation Officers and LGA Collation Officers: document upload, one person per position (two Ward Collation Officers per ward), separate dashboards for staff and collation officers, and a reports and downloads centre. Live at https://www.apclagos.org.
 
 - **Public site**: landing page, a five-step mobile-first registration form (details, role and location, identity and bank details, documents, review and consent), and a status check by reference and phone number.
 - **Admin** (`/admin`): role-based dashboard with registration trends and LGA and role summaries; collation officer positions (filled, vacant, contested); a searchable, filterable registration list (role, LGA, ward, polling unit, senatorial district, origin, dates); detail pages with the passport photograph, voter’s card and masked identity and bank details (administrators can reveal them, audit-logged), approval workflow with reasons, notes and decision emails; permanent deletion; reports and downloads (Excel and CSV); audit log; accounts.

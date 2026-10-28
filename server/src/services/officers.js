@@ -11,7 +11,7 @@
 import crypto from 'node:crypto';
 import { Agent } from '../models/Agent.js';
 import { User, OFFICER_ROLE_FOR } from '../models/User.js';
-import { holdsPosition } from './positions.js';
+import { holdsPosition, seatsFor } from './positions.js';
 import { levelOf, POSITION_HOLDING_STATUSES } from '../../../shared/options.js';
 import { wardsFor, pollingUnitsFor } from './electoral.js';
 
@@ -69,11 +69,9 @@ export async function grantOfficerAccess(agentId) {
   if (existing && String(existing.assignment?.agent ?? '') !== String(agent._id)) {
     throw new AccessProblem('Another account already uses this email address. Ask the applicant for a different address, or remove the other account first.', 'EMAIL_IN_USE');
   }
-  // Only one active account per post: switch off any account for an earlier holder.
-  await User.updateMany(
-    { role, 'assignment.level': level, 'assignment.lga': agent.lga, ...(level === 'ward' ? { 'assignment.wardCode': agent.wardCode } : {}), 'assignment.agent': { $ne: agent._id }, active: true },
-    { $set: { active: false }, $inc: { tokenVersion: 1 } },
-  );
+  // An earlier holder's account needs no switching off here: every officer
+  // request re-checks that the registration still holds a position (a ward
+  // has two), so an account whose registration lost its position is refused.
   if (existing) {
     Object.assign(existing, { role, assignment, active: true, name: `${agent.firstName} ${agent.lastName}` });
     existing.tokenVersion += 1;
@@ -165,14 +163,17 @@ export async function wardDashboard(a) {
 export async function lgaDashboard(a) {
   const wards = wardsFor('Lagos', a.lga).wards ?? [];
   const slots = await agentSlots({ lga: a.lga });
+  // Ward Collation Officer positions per ward: how many of the ward's
+  // positions (two) are filled, and how many by approved registrations.
+  const seats = seatsFor('ward_collation_officer');
   const officers = await Agent.aggregate([
     { $match: { lga: a.lga, agentCategory: 'ward_collation_officer', status: HOLDING } },
-    { $group: { _id: '$wardCode', approved: { $max: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] } } } },
+    { $group: { _id: '$wardCode', n: { $sum: 1 }, approved: { $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] } } } },
   ]);
-  const wardOfficer = Object.fromEntries(officers.filter((o) => o._id).map((o) => [o._id, o.approved ? 'approved' : 'pending']));
+  const wardOfficer = Object.fromEntries(officers.filter((o) => o._id).map((o) => [o._id, { filled: Math.min(o.n, seats), approved: Math.min(o.approved, seats), contested: o.n > seats }]));
   const rows = wards.map((w) => {
     const units = pollingUnitsFor('Lagos', a.lga, w.code) ?? [];
-    return { code: w.code, name: w.name, ...summarise(units, slots), wardOfficer: { status: wardOfficer[w.code] ?? 'vacant' } };
+    return { code: w.code, name: w.name, ...summarise(units, slots), wardOfficer: { seats, ...(wardOfficer[w.code] ?? { filled: 0, approved: 0, contested: false }) } };
   });
   const sum = (k) => rows.reduce((t, r) => t + r[k], 0);
   return {
@@ -185,7 +186,8 @@ export async function lgaDashboard(a) {
       filled: sum('filled'),
       approved: sum('approved'),
       vacant: sum('vacant'),
-      wardOfficersFilled: rows.filter((r) => r.wardOfficer.status !== 'vacant').length,
+      wardOfficerPositions: rows.length * seats,
+      wardOfficersFilled: rows.reduce((t, r) => t + r.wardOfficer.filled, 0),
     },
     wards: rows,
   };
